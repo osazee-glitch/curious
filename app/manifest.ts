@@ -8,7 +8,7 @@ export default function manifest(): MetadataRoute.Manifest {
     display: "standalone",
     icons: [
       {
-        src: "/ithinklylogo.jpeg",
+        src: "/appicon.jpeg",
         type: "image/jpeg",
       },
     ],
