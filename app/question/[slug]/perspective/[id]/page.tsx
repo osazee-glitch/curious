@@ -32,6 +32,7 @@ export default function PerspectivePage() {
         .from("questions")
         .select("keyword, question")
         .eq("slug", slug)
+        .limit(1)
         .maybeSingle();
 
       if (error) {

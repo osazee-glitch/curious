@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { supabase } from "./lib/supabase";
 
 export default function Home() {
   const router = useRouter();
  const [showCreateQuestion, setShowCreateQuestion] = useState(false);
 const [searchedQuestion, setSearchedQuestion] = useState(""); 
 
-const searchQuestion = (question: string) => {
+const searchQuestion = async (question: string) => {
   const trimmedQuestion = question.trim();
 
   if (!trimmedQuestion) return;
@@ -18,21 +19,19 @@ const searchQuestion = (question: string) => {
     .replace(/\s+/g, "-")
     .replace(/[^\w-]/g, "");
 
-  const savedQuestions = localStorage.getItem("curious-questions");
+  const { data: existingQuestion, error } = await supabase
+    .from("questions")
+    .select("slug")
+    .eq("slug", slug)
+    .limit(1)
+    .maybeSingle();
 
-  let questions: string[] = [];
-
-  if (savedQuestions) {
-    try {
-      questions = JSON.parse(savedQuestions);
-    } catch {
-      questions = [];
-    }
+  if (error) {
+    console.error("Error checking existing question:", error);
+    return;
   }
 
-  const questionExists = questions.includes(slug);
-
-  if (questionExists) {
+  if (existingQuestion) {
     router.push(`/question/${encodeURIComponent(slug)}`);
   } else {
     setSearchedQuestion(trimmedQuestion);

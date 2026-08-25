@@ -20,56 +20,22 @@ function CreateQuestionPageContent() {
       .replace(/\s+/g, "-")
       .replace(/[^\w-]/g, "");
 
-    const savedQuestions = localStorage.getItem("curious-questions");
+    const { data: existingQuestion, error: lookupError } = await supabase
+      .from("questions")
+      .select("slug")
+      .eq("slug", slug)
+      .limit(1)
+      .maybeSingle();
 
-    let questions: string[] = [];
-
-    if (savedQuestions) {
-      try {
-        questions = JSON.parse(savedQuestions);
-      } catch {
-        questions = [];
-      }
+    if (lookupError) {
+      console.error("Error checking existing question:", lookupError);
+      return;
     }
 
- if (!questions.includes(slug)) {
-  questions.push(slug);
-  localStorage.setItem(
-    "curious-questions",
-    JSON.stringify(questions)
-  );
-} 
-
-const savedMetadata = localStorage.getItem("curious-question-metadata");
-
-let metadata: {
-  slug: string;
-  keyword: string;
-  question: string;
-}[] = [];
-
-if (savedMetadata) {
-  try {
-    metadata = JSON.parse(savedMetadata);
-  } catch {
-    metadata = [];
-  }
-}
-
-const existingMetadata = metadata.find((item) => item.slug === slug);
-
-if (!existingMetadata) {
-  metadata.push({
-    slug,
-    keyword: keyword.trim(),
-    question: question.trim(),
-  });
-
-  localStorage.setItem(
-    "curious-question-metadata",
-    JSON.stringify(metadata)
-  );
-}
+    if (existingQuestion) {
+      router.push(`/question/${encodeURIComponent(slug)}`);
+      return;
+    }
 
 const { error } = await supabase
   .from("questions")
@@ -80,6 +46,18 @@ const { error } = await supabase
   });
 
 if (error) {
+  const { data: questionCreatedElsewhere } = await supabase
+    .from("questions")
+    .select("slug")
+    .eq("slug", slug)
+    .limit(1)
+    .maybeSingle();
+
+  if (questionCreatedElsewhere) {
+    router.push(`/question/${encodeURIComponent(slug)}`);
+    return;
+  }
+
   console.error("Error saving question:", error);
   return;
 }

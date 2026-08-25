@@ -53,6 +53,7 @@ useEffect(() => {
       .from("questions")
       .select("slug, keyword, question")
       .eq("slug", slug)
+      .limit(1)
       .maybeSingle();
 
     if (error) {
