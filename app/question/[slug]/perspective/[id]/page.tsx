@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
+import {
+  clearPerspectiveReaction,
+  hasPerspectiveReaction,
+  markPerspectiveReaction,
+} from "../../../../lib/perspectiveReactions";
 
 type QuestionMetadata = {
   keyword: string;
@@ -77,7 +82,9 @@ export default function PerspectivePage() {
   }, [params.id, params.slug]);
 
   const likePerspective = async () => {
-    if (!perspective) return;
+    if (!perspective || hasPerspectiveReaction(perspective.id, "like")) return;
+
+    markPerspectiveReaction(perspective.id, "like");
 
     const nextLikes = perspective.likes + 1;
     const { data, error } = await supabase
@@ -89,6 +96,7 @@ export default function PerspectivePage() {
       .single();
 
     if (error) {
+      clearPerspectiveReaction(perspective.id, "like");
       console.error("Failed to like perspective:", error);
       return;
     }
@@ -101,7 +109,9 @@ export default function PerspectivePage() {
   };
 
   const dislikePerspective = async () => {
-    if (!perspective) return;
+    if (!perspective || hasPerspectiveReaction(perspective.id, "dislike")) return;
+
+    markPerspectiveReaction(perspective.id, "dislike");
 
     const nextDislikes = perspective.dislikes + 1;
     const { data, error } = await supabase
@@ -113,6 +123,7 @@ export default function PerspectivePage() {
       .single();
 
     if (error) {
+      clearPerspectiveReaction(perspective.id, "dislike");
       console.error("Failed to dislike perspective:", error);
       return;
     }

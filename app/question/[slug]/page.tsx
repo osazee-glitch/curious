@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
+import {
+  clearPerspectiveReaction,
+  hasPerspectiveReaction,
+  markPerspectiveReaction,
+} from "@/app/lib/perspectiveReactions";
 
 type Perspective = {
   id: number;
@@ -151,7 +156,9 @@ useEffect(() => {
   // LIKE
   const likePerspective = async (id: number) => {
     const current = perspectives.find((perspective) => perspective.id === id);
-    if (!current || !slug) return;
+    if (!current || !slug || hasPerspectiveReaction(id, "like")) return;
+
+    markPerspectiveReaction(id, "like");
 
     const nextLikes = current.likes + 1;
     const { data, error } = await supabase
@@ -163,6 +170,7 @@ useEffect(() => {
       .single();
 
     if (error) {
+      clearPerspectiveReaction(id, "like");
       console.error("Failed to like perspective:", error);
       return;
     }
@@ -179,7 +187,9 @@ useEffect(() => {
   // DISLIKE
   const dislikePerspective = async (id: number) => {
     const current = perspectives.find((perspective) => perspective.id === id);
-    if (!current || !slug) return;
+    if (!current || !slug || hasPerspectiveReaction(id, "dislike")) return;
+
+    markPerspectiveReaction(id, "dislike");
 
     const nextDislikes = current.dislikes + 1;
     const { data, error } = await supabase
@@ -191,6 +201,7 @@ useEffect(() => {
       .single();
 
     if (error) {
+      clearPerspectiveReaction(id, "dislike");
       console.error("Failed to dislike perspective:", error);
       return;
     }
