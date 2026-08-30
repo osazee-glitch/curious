@@ -8,6 +8,7 @@ type PublicAccount = {
   username: string;
   age: number;
   country: string;
+  profilePicture?: string;
 };
 
 export default function PublicProfilePage() {
@@ -47,7 +48,9 @@ export default function PublicProfilePage() {
             <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">{account.username}</h1>
 
             <div className="my-8 flex justify-center">
-              <div className="flex h-32 w-32 items-center justify-center overflow-hidden rounded-full bg-zinc-100 text-2xl font-medium text-zinc-500">P</div>
+              <div className="flex h-32 w-32 items-center justify-center overflow-hidden rounded-full bg-zinc-100 text-2xl font-medium text-zinc-500">
+                {account.profilePicture ? <img src={account.profilePicture} alt="Profile" className="h-full w-full object-cover" /> : "P"}
+              </div>
             </div>
 
             <div className="space-y-5">

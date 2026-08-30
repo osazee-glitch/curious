@@ -10,15 +10,26 @@ export default function EditProfilePage() {
   const router = useRouter();
   const [account, setAccount] = useState({
     accountId: "",
-    username: "username",
-    age: 28,
-    country: "United Kingdom",
-    deliveryAddress: "12 Market Street, London",
-    postcode: "SW1A 1AA",
-    email: "username@example.com",
+    username: "",
+    age: 0,
+    country: "",
+    deliveryAddress: "",
+    postcode: "",
+    email: "",
     isCreator: false,
   });
   const [confirmed, setConfirmed] = useState(false);
+
+  const handleProfilePictureChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAccount((current) => ({ ...current, profilePicture: String(reader.result) }));
+    };
+    reader.readAsDataURL(file);
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -29,26 +40,34 @@ export default function EditProfilePage() {
         return;
       }
 
-      const storedAccount = window.localStorage.getItem(ACCOUNT_KEY);
+      const accountKey = `${ACCOUNT_KEY}_${data.session.user.id}`;
+      const storedAccount = window.localStorage.getItem(accountKey);
+      const legacyAccount = window.localStorage.getItem(ACCOUNT_KEY);
+      const parsedLegacyAccount = legacyAccount ? JSON.parse(legacyAccount) : null;
       const nextAccount = storedAccount
         ? {
-            username: "username",
-            age: 28,
-            country: "United Kingdom",
-            deliveryAddress: "12 Market Street, London",
-            postcode: "SW1A 1AA",
-            email: "username@example.com",
+            username: "",
+            age: 0,
+            country: "",
+            deliveryAddress: "",
+            postcode: "",
+            email: "",
             isCreator: false,
             ...JSON.parse(storedAccount),
             accountId: data.session.user.id,
           }
-        : {
-            username: "username",
-            age: 28,
-            country: "United Kingdom",
-            deliveryAddress: "12 Market Street, London",
-            postcode: "SW1A 1AA",
-            email: "username@example.com",
+        : parsedLegacyAccount?.accountId === data.session.user.id
+          ? {
+            ...parsedLegacyAccount,
+            accountId: data.session.user.id,
+          }
+          : {
+            username: "",
+            age: 0,
+            country: "",
+            deliveryAddress: "",
+            postcode: "",
+            email: "",
             isCreator: false,
             accountId: data.session.user.id,
           };
@@ -76,7 +95,10 @@ export default function EditProfilePage() {
       isCreator: Boolean(account.isCreator),
     };
 
-    window.localStorage.setItem(ACCOUNT_KEY, JSON.stringify(nextAccount));
+    window.localStorage.setItem(
+      `${ACCOUNT_KEY}_${nextAccount.accountId}`,
+      JSON.stringify(nextAccount),
+    );
     setAccount(nextAccount);
     router.push(nextAccount.isCreator ? "/creator-profile" : "/profile");
   };
@@ -126,6 +148,7 @@ export default function EditProfilePage() {
                   id="profile-picture"
                   type="file"
                   accept="image/*"
+                  onChange={handleProfilePictureChange}
                   className="w-full rounded-full border border-zinc-200 bg-white px-4 py-3 text-base text-zinc-900 file:mr-3 file:rounded-full file:border-0 file:bg-zinc-100 file:px-4 file:py-2 file:text-sm file:font-medium file:text-zinc-700"
                 />
               </div>

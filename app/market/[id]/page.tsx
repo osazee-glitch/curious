@@ -13,7 +13,10 @@ type MediaItem = {
 
 type Review = {
   id?: string | number;
+  reviewerAccountId?: string;
   buyerUsername?: string;
+  reviewerProfilePicture?: string;
+  reviewerIsCreator?: boolean;
   rating?: number;
   text?: string;
   comment?: string;
@@ -23,6 +26,7 @@ type Listing = {
   id: number;
   name: string;
   price: number;
+  stock?: number;
   category: string;
   creator: string;
   description: string;
@@ -41,6 +45,7 @@ const getListing = (id: string): Listing | null => {
       id: Number(savedListing.id),
       name: savedListing.productName || "Untitled product",
       price: Number(savedListing.price) || 0,
+      stock: Number.isInteger(Number(savedListing.stock)) && Number(savedListing.stock) >= 0 ? Number(savedListing.stock) : undefined,
       category: savedListing.productCategory || "Inventions",
       creator: savedListing.creatorUsername || "Unknown creator",
       description: savedListing.productDescription || "",
@@ -58,6 +63,7 @@ const getListing = (id: string): Listing | null => {
     id: Number(product.id),
     name: product.name || "Untitled product",
     price: Number(product.price) || 0,
+    stock: Number.isInteger(Number(product.stock)) && Number(product.stock) >= 0 ? Number(product.stock) : undefined,
     category: product.category || "Inventions",
     creator: product.creator || "Unknown creator",
     description: product.description || "",
@@ -73,6 +79,8 @@ export default function ListingDetailPage() {
   const [mediaIndex, setMediaIndex] = useState(0);
   const [addedToBasket, setAddedToBasket] = useState(false);
   const [currentAccountId, setCurrentAccountId] = useState("");
+  const [reviewText, setReviewText] = useState("");
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   useEffect(() => {
     if (params.id) setListing(getListing(params.id));
@@ -96,6 +104,56 @@ export default function ListingDetailPage() {
 
   const addToBasket = () => {
     setAddedToBasket(true);
+  };
+
+  const submitReview = async () => {
+    const text = reviewText.trim();
+    if (!text || !currentAccountId || currentAccountId === listing.creatorAccountId) return;
+
+    const accountRaw = window.localStorage.getItem(`ithinkly_account_${currentAccountId}`);
+    const account = accountRaw ? JSON.parse(accountRaw) : {};
+    const review = {
+      id: crypto.randomUUID(),
+      reviewerAccountId: currentAccountId,
+      buyerUsername: account.username || "Buyer",
+      reviewerProfilePicture: account.profilePicture || "",
+      reviewerIsCreator: account.isCreator === true,
+      text,
+      createdAt: new Date().toISOString(),
+    };
+    const storedListings = window.localStorage.getItem("ithinkly_listings");
+    const listings = storedListings ? JSON.parse(storedListings) : [];
+    const listingIndex = listings.findIndex(
+      (storedListing: { id: number | string }) => String(storedListing.id) === String(listing.id),
+    );
+
+    if (listingIndex === -1) return;
+
+    const updatedListing = {
+      ...listings[listingIndex],
+      reviews: [...(Array.isArray(listings[listingIndex].reviews) ? listings[listingIndex].reviews : []), review],
+    };
+    listings[listingIndex] = updatedListing;
+    window.localStorage.setItem("ithinkly_listings", JSON.stringify(listings));
+    setListing({ ...listing, reviews: [...listing.reviews, review] });
+    setReviewText("");
+    setReviewOpen(false);
+  };
+
+  const reviewerProfileHref = (review: Review) =>
+    review.reviewerAccountId
+      ? `/${review.reviewerIsCreator ? "creator-profile" : "profile"}/${review.reviewerAccountId}`
+      : "/profile";
+
+  const stageReviewerProfile = (review: Review) => {
+    if (!review.reviewerAccountId) return;
+    const accountRaw = window.localStorage.getItem(`ithinkly_account_${review.reviewerAccountId}`);
+    if (accountRaw) {
+      window.sessionStorage.setItem(
+        `ithinkly_public_account_${review.reviewerAccountId}`,
+        accountRaw,
+      );
+    }
   };
 
   return (
@@ -168,6 +226,10 @@ export default function ListingDetailPage() {
 
           <p className="mt-8 whitespace-pre-wrap text-base leading-7 text-zinc-700">{listing.description}</p>
 
+          {listing.stock !== undefined && (
+            <p className="mt-4 text-sm text-zinc-500">In stock: {listing.stock}</p>
+          )}
+
           <button
             type="button"
             onClick={addToBasket}
@@ -185,7 +247,20 @@ export default function ListingDetailPage() {
             <div className="mt-5 space-y-5">
               {listing.reviews.map((review, index) => (
                 <article key={review.id ?? index} className="border-b border-zinc-100 pb-5">
-                  <p className="text-sm font-medium">{review.buyerUsername || "Buyer"}</p>
+                  <a
+                    href={reviewerProfileHref(review)}
+                    onClick={() => stageReviewerProfile(review)}
+                    className="flex items-center gap-3 text-sm font-medium hover:underline"
+                  >
+                    <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-zinc-100 text-zinc-500">
+                      {review.reviewerProfilePicture ? (
+                        <img src={review.reviewerProfilePicture} alt="Profile" className="h-full w-full object-cover" />
+                      ) : (
+                        "P"
+                      )}
+                    </span>
+                    {review.buyerUsername || "Buyer"}
+                  </a>
                   {review.rating !== undefined && <p className="mt-1 text-sm text-zinc-500">{review.rating}/5</p>}
                   <p className="mt-2 text-sm leading-6 text-zinc-700">{review.text || review.comment || ""}</p>
                 </article>
@@ -193,12 +268,42 @@ export default function ListingDetailPage() {
             </div>
           )}
           {currentAccountId && currentAccountId !== listing.creatorAccountId && (
-            <button
-              type="button"
-              className="mt-6 rounded-full border border-zinc-900 px-5 py-2.5 text-sm font-medium uppercase tracking-[0.14em] text-zinc-900 hover:bg-zinc-900 hover:text-white"
-            >
-              ADD REVIEW
-            </button>
+            reviewOpen ? (
+              <div className="mt-6 space-y-3">
+                <textarea
+                  value={reviewText}
+                  onChange={(event) => setReviewText(event.target.value)}
+                  placeholder="Write your review"
+                  rows={4}
+                  className="w-full rounded-2xl border border-zinc-200 px-4 py-3 text-sm outline-none focus:border-zinc-400"
+                />
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={submitReview}
+                    disabled={!reviewText.trim()}
+                    className="rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-medium uppercase tracking-[0.14em] text-white hover:bg-zinc-700 disabled:bg-zinc-300"
+                  >
+                    SUBMIT REVIEW
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReviewOpen(false)}
+                    className="rounded-full border border-zinc-200 px-5 py-2.5 text-sm font-medium uppercase tracking-[0.14em] text-zinc-900"
+                  >
+                    CANCEL
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setReviewOpen(true)}
+                className="mt-6 rounded-full border border-zinc-900 px-5 py-2.5 text-sm font-medium uppercase tracking-[0.14em] text-zinc-900 hover:bg-zinc-900 hover:text-white"
+              >
+                ADD REVIEW
+              </button>
+            )
           )}
         </section>
       </div>

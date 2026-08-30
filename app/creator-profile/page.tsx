@@ -8,25 +8,19 @@ const ACCOUNT_KEY = "ithinkly_account";
 const SELLER_PROFILE_KEY = "ithinkly_seller_profile";
 
 const defaultAccount = {
-  username: "username",
-  age: 28,
-  country: "United Kingdom",
-  email: "username@example.com",
+  profilePicture: "",
+  username: "",
+  age: 0,
+  country: "",
+  email: "",
   isCreator: false,
 };
 
 const defaultSellerSelections = {
-  selling: [
-    "3D-printed body/case + electronic module hardware",
-    "3D-printed body/case + custom electronic hardware",
-  ],
-  productType: [
-    "Assistive devices for elderly people",
-    "Homeware devices (non-AC powered)",
-    "Desk & workspace devices",
-  ],
-  powered: ["Lithium battery — rechargeable", "5V USB cable"],
-  delivery: ["Royal Mail", "Evri"],
+  selling: [],
+  productType: [],
+  powered: [],
+  delivery: [],
 };
 
 export default function CreatorProfilePage() {
@@ -43,15 +37,22 @@ export default function CreatorProfilePage() {
         return;
       }
 
-      const storedAccount = window.localStorage.getItem(ACCOUNT_KEY);
-      const parsedAccount = storedAccount ? { ...defaultAccount, ...JSON.parse(storedAccount) } : defaultAccount;
+      const accountKey = `${ACCOUNT_KEY}_${data.session.user.id}`;
+      const storedAccount = window.localStorage.getItem(accountKey);
+      const legacyAccount = window.localStorage.getItem(ACCOUNT_KEY);
+      const parsedLegacyAccount = legacyAccount ? JSON.parse(legacyAccount) : null;
+      const parsedAccount = storedAccount
+        ? { ...defaultAccount, ...JSON.parse(storedAccount) }
+        : parsedLegacyAccount?.accountId === data.session.user.id
+          ? { ...defaultAccount, ...parsedLegacyAccount }
+          : { ...defaultAccount, accountId: data.session.user.id };
       const storedSellerProfile = window.localStorage.getItem(SELLER_PROFILE_KEY);
       const parsedSellerProfile = storedSellerProfile
         ? JSON.parse(storedSellerProfile)
         : parsedAccount.creatorProfile || defaultSellerSelections;
 
       const nextAccount = { ...parsedAccount, accountId: data.session.user.id, isCreator: true };
-      window.localStorage.setItem(ACCOUNT_KEY, JSON.stringify(nextAccount));
+      window.localStorage.setItem(accountKey, JSON.stringify(nextAccount));
       setAccount(nextAccount);
       setSellerSelections({
         ...defaultSellerSelections,
@@ -102,7 +103,11 @@ export default function CreatorProfilePage() {
 
             <div className="mb-8 flex justify-center">
               <div className="flex h-32 w-32 items-center justify-center overflow-hidden rounded-full bg-zinc-100 text-2xl font-medium text-zinc-500">
-                <div className="flex h-full w-full items-center justify-center bg-zinc-100">P</div>
+                {account.profilePicture ? (
+                  <img src={account.profilePicture} alt="Profile" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-zinc-100">P</div>
+                )}
               </div>
             </div>
 

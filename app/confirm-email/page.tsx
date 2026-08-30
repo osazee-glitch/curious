@@ -15,8 +15,8 @@ export default async function ConfirmEmailPage({
     typeof params.email === 'string'
       ? params.email
       : Array.isArray(params.email)
-        ? params.email[0] || 'username@example.com'
-        : 'username@example.com';
+        ? params.email[0] || ''
+        : '';
   const backLink = from === 'edit' ? '/profile/edit' : '/account';
 
   return (

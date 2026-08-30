@@ -7,12 +7,13 @@ const ACCOUNT_KEY = "ithinkly_account";
 import { supabase } from "../lib/supabase";
 
 const defaultAccount = {
-  username: "username",
-  age: 28,
-  country: "United Kingdom",
-  email: "username@example.com",
-  deliveryAddress: "12 Market Street, London",
-  postcode: "SW1A 1AA",
+  profilePicture: "",
+  username: "",
+  age: 0,
+  country: "",
+  email: "",
+  deliveryAddress: "",
+  postcode: "",
 };
 
 export default function ProfilePage() {
@@ -29,11 +30,19 @@ export default function ProfilePage() {
         return;
       }
 
-      const storedAccount = window.localStorage.getItem(ACCOUNT_KEY);
-      const nextAccount = storedAccount ? { ...defaultAccount, ...JSON.parse(storedAccount) } : defaultAccount;
+      const accountKey = `${ACCOUNT_KEY}_${data.session.user.id}`;
+      const storedAccount = window.localStorage.getItem(accountKey);
+      const legacyAccount = window.localStorage.getItem(ACCOUNT_KEY);
+      const parsedLegacyAccount = legacyAccount ? JSON.parse(legacyAccount) : null;
+      const nextAccount = storedAccount
+        ? { ...defaultAccount, ...JSON.parse(storedAccount) }
+        : parsedLegacyAccount?.accountId === data.session.user.id
+          ? { ...defaultAccount, ...parsedLegacyAccount }
+          : { ...defaultAccount, accountId: data.session.user.id };
 
-      window.localStorage.setItem(ACCOUNT_KEY, JSON.stringify({ ...nextAccount, accountId: data.session.user.id }));
-      setAccount({ ...nextAccount, accountId: data.session.user.id });
+      const accountForUser = { ...nextAccount, accountId: data.session.user.id };
+      window.localStorage.setItem(accountKey, JSON.stringify(accountForUser));
+      setAccount(accountForUser);
       setReady(true);
     }).catch(() => {
       router.replace("/market");
@@ -86,7 +95,11 @@ export default function ProfilePage() {
 
             <div className="mb-8 flex justify-center">
               <div className="flex h-32 w-32 items-center justify-center overflow-hidden rounded-full bg-zinc-100 text-2xl font-medium text-zinc-500">
-                <div className="flex h-full w-full items-center justify-center bg-zinc-100">P</div>
+                {account.profilePicture ? (
+                  <img src={account.profilePicture} alt="Profile" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-zinc-100">P</div>
+                )}
               </div>
             </div>
 

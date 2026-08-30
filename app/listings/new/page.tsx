@@ -24,8 +24,10 @@ export default function NewListingPage() {
   const [productCategory, setProductCategory] = useState(categoryOptions[0]);
   const [productName, setProductName] = useState("");
   const [productPrice, setProductPrice] = useState("0.00");
+  const [productStock, setProductStock] = useState("");
   const [productDescription, setProductDescription] = useState("");
   const [mediaFiles, setMediaFiles] = useState<File[]>([]);
+  const [validationMessage, setValidationMessage] = useState("");
 
   const fileToDataUrl = (file: File) =>
     new Promise<string>((resolve, reject) => {
@@ -43,11 +45,17 @@ export default function NewListingPage() {
   const handlePostListing = async () => {
     if (typeof window === "undefined") return;
 
+    const stock = Number(productStock);
+    if (!/^\d+$/.test(productStock) || !Number.isSafeInteger(stock) || stock < 0) {
+      setValidationMessage("Please enter a whole number of products in stock.");
+      return;
+    }
+
     const storedAccount = window.localStorage.getItem(ACCOUNT_KEY);
     const parsedAccount = storedAccount ? JSON.parse(storedAccount) : null;
     const { data } = await supabase.auth.getUser();
     const accountId = data.user?.id || "";
-    const creatorUsername = parsedAccount?.username || "username";
+    const creatorUsername = parsedAccount?.username || "";
 
     const media = await Promise.all(
       mediaFiles.map(async (file) => ({
@@ -66,6 +74,7 @@ export default function NewListingPage() {
       productName,
       productCategory,
       price: Number(productPrice) || 0,
+      stock,
       productDescription,
       media,
       createdAt: new Date().toISOString(),
@@ -92,7 +101,7 @@ export default function NewListingPage() {
     try {
       const parsedAccount = JSON.parse(storedAccount);
       if (!parsedAccount.username) {
-        const fallback = { ...parsedAccount, username: "username" };
+        const fallback = { ...parsedAccount, username: "" };
         window.localStorage.setItem(ACCOUNT_KEY, JSON.stringify(fallback));
       }
     } catch {
@@ -219,6 +228,28 @@ export default function NewListingPage() {
                   className="w-full rounded-[24px] border border-zinc-200 bg-white px-4 py-3 text-base text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-zinc-400"
                 />
               </div>
+
+              <div>
+                <label htmlFor="product-stock" className="mb-2 block text-sm text-zinc-600">
+                  In stock
+                </label>
+                <input
+                  id="product-stock"
+                  type="number"
+                  min="0"
+                  step="1"
+                  required
+                  value={productStock}
+                  onChange={(event) => {
+                    setProductStock(event.target.value);
+                    setValidationMessage("");
+                  }}
+                  placeholder="0"
+                  className="w-full rounded-full border border-zinc-200 bg-white px-4 py-3 text-base text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-zinc-400"
+                />
+              </div>
+
+              {validationMessage && <p className="text-sm text-red-600">{validationMessage}</p>}
 
               <button
                 type="button"

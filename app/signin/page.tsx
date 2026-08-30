@@ -7,12 +7,12 @@ import { supabase } from "../lib/supabase";
 const ACCOUNT_KEY = "ithinkly_account";
 
 const defaultAccount = {
-  username: "username",
-  age: 28,
-  country: "United Kingdom",
-  email: "username@example.com",
-  deliveryAddress: "12 Market Street, London",
-  postcode: "SW1A 1AA",
+  username: "",
+  age: 0,
+  country: "",
+  email: "",
+  deliveryAddress: "",
+  postcode: "",
   isCreator: false,
   creatorProfile: null,
 };

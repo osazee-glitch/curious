@@ -10,6 +10,7 @@ type Product = {
   name: string;
   description: string;
   price: number;
+  stock?: number;
   creator: string;
   category: (typeof categories)[number];
   accent: string;
@@ -19,48 +20,7 @@ type Product = {
   creatorAccount?: Record<string, unknown>;
 };
 
-const products: Product[] = [
-  {
-    id: 1,
-    name: "Pocket Lamp Kit",
-    description: "A compact rechargeable lamp designed for bedside use and travel.",
-    price: 39,
-    creator: "Ava Chen",
-    category: "Electronics",
-    accent: "bg-zinc-200",
-    code: "PLK",
-  },
-  {
-    id: 2,
-    name: "Desk Stand 02",
-    description: "A minimal stand for tablets and small devices with a clean profile.",
-    price: 52,
-    creator: "Noah Patel",
-    category: "3D Printed",
-    accent: "bg-zinc-300",
-    code: "DS2",
-  },
-  {
-    id: 3,
-    name: "Signal Beacon",
-    description: "A low-power warning device built for prototypes, workshops and learning kits.",
-    price: 68,
-    creator: "Lena Ortiz",
-    category: "Inventions",
-    accent: "bg-zinc-100",
-    code: "SBN",
-  },
-  {
-    id: 4,
-    name: "Cable Dock Mini",
-    description: "An organiser for chargers, cables and compact tech accessories.",
-    price: 27,
-    creator: "Milo Grant",
-    category: "Electronics",
-    accent: "bg-zinc-200",
-    code: "CDM",
-  },
-];
+const products: Product[] = [];
 
 export default function CreatorMarketPage() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -92,6 +52,7 @@ export default function CreatorMarketPage() {
           name: listing.productName || "Untitled product",
           description: listing.productDescription || "",
           price: Number(listing.price) || 0,
+          stock: Number.isInteger(Number(listing.stock)) && Number(listing.stock) >= 0 ? Number(listing.stock) : undefined,
           creator: listing.creatorUsername || "Unknown creator",
           category: listing.productCategory || "Inventions",
           accent: "bg-zinc-200",
@@ -117,6 +78,7 @@ export default function CreatorMarketPage() {
       const matchesQuery =
         product.name.toLowerCase().includes(query.toLowerCase()) ||
         product.description.toLowerCase().includes(query.toLowerCase()) ||
+        product.category.toLowerCase().includes(query.toLowerCase()) ||
         product.creator.toLowerCase().includes(query.toLowerCase());
 
       return matchesCategory && matchesQuery;
@@ -399,6 +361,7 @@ export default function CreatorMarketPage() {
 
             <button
               type="button"
+              onClick={() => setQuery((current) => current.trim())}
               className="rounded-full bg-zinc-900 px-5 py-3 text-xs font-medium uppercase tracking-[0.16em] text-white transition hover:bg-zinc-700"
             >
               Search
@@ -408,10 +371,10 @@ export default function CreatorMarketPage() {
           {filteredProducts.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-6 py-12 text-center text-zinc-500">
               <p className="text-sm uppercase tracking-[0.2em] text-zinc-400">
-                No products yet
+                No products found
               </p>
               <p className="mt-3 text-base">
-                Nothing matches this search just yet. New creator listings will appear here.
+                Nothing matches this search just yet.
               </p>
             </div>
           ) : (
@@ -488,6 +451,10 @@ export default function CreatorMarketPage() {
                     </div>
 
                     <p className="text-sm leading-6 text-zinc-600">{product.description}</p>
+
+                    {product.stock !== undefined && (
+                      <p className="text-sm text-zinc-500">In stock: {product.stock}</p>
+                    )}
 
                     <div className="flex items-center justify-between border-t border-zinc-200 pt-4 text-sm text-zinc-500">
                       <a

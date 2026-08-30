@@ -5,23 +5,6 @@ import { useState } from "react";
 import { useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 
-const sampleSellerSelections = {
-  selling: [
-    "3D-printed body/case + electronic module hardware",
-    "3D-printed body/case + custom electronic hardware",
-  ],
-  productType: [
-    "Assistive devices for elderly people",
-    "Homeware devices (non-AC powered)",
-    "Desk & workspace devices",
-  ],
-  powered: [
-    "Lithium battery — rechargeable",
-    "5V USB cable",
-  ],
-  delivery: ["Royal Mail", "Evri"],
-};
-
 export default function SellerBankDetailsPage() {
   const router = useRouter();
   const [form, setForm] = useState({
