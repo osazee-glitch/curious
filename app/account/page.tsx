@@ -29,30 +29,44 @@ export default function AccountPage() {
     }
 
     setIsSubmitting(true);
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
 
-    if (error) {
-      setErrorMessage(
-        error.message.toLowerCase().includes("already")
-          ? "An account with this email is already registered."
-          : error.message,
-      );
+    try {
+      const response = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      const { data, error } = response;
+
+      if (error) {
+        const details = [error.code, error.status].filter(Boolean).join("; ");
+        const message = error.message || "Supabase Auth rejected the signup request.";
+        setErrorMessage(
+          `${message}${details ? ` (${details})` : ""}`,
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (!data.user) {
+        setErrorMessage("Supabase Auth returned no user for this signup request.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (data.session) {
+        router.push("/profile");
+        return;
+      }
+
+      router.push(`/confirm-email?email=${encodeURIComponent(email)}`);
+    } catch (error) {
+      const details = error instanceof Error ? error.message : String(error);
+      setErrorMessage(details || "The signup request failed before Supabase returned a response.");
       setIsSubmitting(false);
-      return;
     }
-
-    if (data.session) {
-      router.push("/profile");
-      return;
-    }
-
-    router.push(`/confirm-email?email=${encodeURIComponent(email)}`);
   };
 
   return (
