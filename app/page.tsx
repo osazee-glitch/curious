@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "./lib/supabase";
@@ -53,12 +54,16 @@ const searchQuestion = async (question: string) => {
   />
 </div>
 
-<a
-  href="/about"
-  className="text-sm text-zinc-500 transition hover:text-zinc-900 mr-0 lg:-mr-35"
+<Link
+  href="/market"
+  aria-label="Open Creator Market"
+  title="Creator Market"
+  className="mr-0 inline-flex items-center justify-center rounded-full border border-zinc-200 p-2.5 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-900 lg:-mr-35"
 >
-  About
-</a>
+  <span aria-hidden="true" className="text-lg leading-none">
+    💡
+  </span>
+</Link>
         </header>
 
         {/* Main */}
@@ -157,8 +162,20 @@ const searchQuestion = async (question: string) => {
 )}
 
         {/* Footer */}
-        <footer className="flex h-16 items-center justify-center text-xs text-zinc-400">
-         Google, but for human perspectives.
+        <footer className="relative flex h-24 items-end justify-center pb-3 text-xs text-zinc-400">
+          <div className="flex w-full max-w-5xl items-center justify-center">
+            <span>Google, but for human perspectives.</span>
+          </div>
+          <div className="absolute bottom-3 right-0 flex items-center justify-end">
+            <Link
+              href="/about"
+              className="text-zinc-500 transition hover:text-zinc-900"
+              aria-label="About"
+              title="About"
+            >
+              ⓘ
+            </Link>
+          </div>
         </footer>
 
       </div>
