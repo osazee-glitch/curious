@@ -18,7 +18,8 @@ function AuthCallbackContent() {
     }
 
     supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-      router.replace(error ? "/signin?error=confirmation" : "/profile");
+      const destination = searchParams.get("from") === "edit" ? "/profile/edit?confirmed=1" : "/profile";
+      router.replace(error ? "/signin?error=confirmation" : destination);
     });
   }, [router, searchParams]);
 

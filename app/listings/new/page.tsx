@@ -51,10 +51,12 @@ export default function NewListingPage() {
       return;
     }
 
-    const storedAccount = window.localStorage.getItem(ACCOUNT_KEY);
-    const parsedAccount = storedAccount ? JSON.parse(storedAccount) : null;
     const { data } = await supabase.auth.getUser();
     const accountId = data.user?.id || "";
+    const storedAccount = accountId
+      ? window.localStorage.getItem(`${ACCOUNT_KEY}_${accountId}`)
+      : null;
+    const parsedAccount = storedAccount ? JSON.parse(storedAccount) : null;
     const creatorUsername = parsedAccount?.username || "";
 
     const media = await Promise.all(
@@ -92,21 +94,27 @@ export default function NewListingPage() {
     if (typeof window === "undefined") return;
 
     supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) window.location.href = "/signin";
-    });
-
-    const storedAccount = window.localStorage.getItem(ACCOUNT_KEY);
-    if (!storedAccount) return;
-
-    try {
-      const parsedAccount = JSON.parse(storedAccount);
-      if (!parsedAccount.username) {
-        const fallback = { ...parsedAccount, username: "" };
-        window.localStorage.setItem(ACCOUNT_KEY, JSON.stringify(fallback));
+      if (!data.session) {
+        window.location.href = "/signin";
+        return;
       }
-    } catch {
-      // ignore malformed local storage state
-    }
+
+      const storedAccount = window.localStorage.getItem(`${ACCOUNT_KEY}_${data.session.user.id}`);
+      if (!storedAccount) return;
+
+      try {
+        const parsedAccount = JSON.parse(storedAccount);
+        if (!parsedAccount.username) {
+          const fallback = { ...parsedAccount, username: "" };
+          window.localStorage.setItem(
+            `${ACCOUNT_KEY}_${data.session.user.id}`,
+            JSON.stringify(fallback),
+          );
+        }
+      } catch {
+        // ignore malformed local storage state
+      }
+    });
   }, []);
 
   return (

@@ -45,7 +45,8 @@ export default function SignInPage() {
     }
 
     if (typeof window !== "undefined") {
-      const storedAccount = window.localStorage.getItem(ACCOUNT_KEY);
+      const accountKey = `${ACCOUNT_KEY}_${data.user.id}`;
+      const storedAccount = window.localStorage.getItem(accountKey);
       const parsedAccount = storedAccount ? JSON.parse(storedAccount) : defaultAccount;
       const nextAccount = {
         ...defaultAccount,
@@ -53,7 +54,7 @@ export default function SignInPage() {
         accountId: data.user.id,
       };
 
-      window.localStorage.setItem(ACCOUNT_KEY, JSON.stringify(nextAccount));
+      window.localStorage.setItem(accountKey, JSON.stringify(nextAccount));
 
       router.push(nextAccount.isCreator ? "/creator-profile" : "/profile");
       return;

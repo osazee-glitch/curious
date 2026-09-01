@@ -64,9 +64,10 @@ export default function SellPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const existingAccount = window.localStorage.getItem(ACCOUNT_KEY);
-
     supabase.auth.getSession().then(({ data }) => {
+      const existingAccount = data.session
+        ? window.localStorage.getItem(`${ACCOUNT_KEY}_${data.session.user.id}`)
+        : null;
       if (!data.session || !existingAccount) {
         router.replace("/account");
       }
@@ -89,8 +90,7 @@ export default function SellPage() {
 
     if (typeof window !== "undefined") {
       const { data } = await supabase.auth.getSession();
-      const existingAccount = window.localStorage.getItem(ACCOUNT_KEY);
-
+      const existingAccount = window.localStorage.getItem(`${ACCOUNT_KEY}_${data.session.user.id}`);
       if (!data.session || !existingAccount) {
         router.replace("/account");
         return;
@@ -110,9 +110,12 @@ export default function SellPage() {
         },
       };
 
-      window.localStorage.setItem(ACCOUNT_KEY, JSON.stringify(nextAccount));
       window.localStorage.setItem(
-        SELLER_PROFILE_KEY,
+        `${ACCOUNT_KEY}_${data.session.user.id}`,
+        JSON.stringify(nextAccount),
+      );
+      window.localStorage.setItem(
+        `${SELLER_PROFILE_KEY}_${data.session.user.id}`,
         JSON.stringify(nextAccount.creatorProfile),
       );
     }

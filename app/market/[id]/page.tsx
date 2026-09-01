@@ -47,7 +47,18 @@ const getListing = (id: string): Listing | null => {
       price: Number(savedListing.price) || 0,
       stock: Number.isInteger(Number(savedListing.stock)) && Number(savedListing.stock) >= 0 ? Number(savedListing.stock) : undefined,
       category: savedListing.productCategory || "Inventions",
-      creator: savedListing.creatorUsername || "Unknown creator",
+      creator: (() => {
+        const creatorId = savedListing.creatorAccountId || savedListing.creatorAccount?.accountId || "";
+        const creatorRaw = creatorId ? window.localStorage.getItem(`ithinkly_account_${creatorId}`) : null;
+        const creatorAccount = creatorRaw ? JSON.parse(creatorRaw) : savedListing.creatorAccount;
+        return creatorAccount?.username || savedListing.creatorUsername || "Unknown creator";
+      })(),
+      creatorProfilePicture: (() => {
+        const creatorId = savedListing.creatorAccountId || savedListing.creatorAccount?.accountId || "";
+        const creatorRaw = creatorId ? window.localStorage.getItem(`ithinkly_account_${creatorId}`) : null;
+        const creatorAccount = creatorRaw ? JSON.parse(creatorRaw) : savedListing.creatorAccount;
+        return creatorAccount?.profilePicture || "";
+      })(),
       description: savedListing.productDescription || "",
       media: Array.isArray(savedListing.media) ? savedListing.media : [],
       reviews: Array.isArray(savedListing.reviews) ? savedListing.reviews : [],
@@ -216,8 +227,11 @@ export default function ListingDetailPage() {
               <p className="mt-2 text-sm uppercase tracking-[0.16em] text-zinc-400">{listing.category}</p>
               <a
                 href={listing.creatorAccountId ? `/creator-profile/${listing.creatorAccountId}` : "/creator-profile"}
-                className="mt-3 inline-block text-sm text-zinc-600 underline hover:text-zinc-900"
+                className="mt-3 inline-flex items-center gap-2 text-sm text-zinc-600 underline hover:text-zinc-900"
               >
+                <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-zinc-100 text-xs text-zinc-500">
+                  {listing.creatorProfilePicture ? <img src={listing.creatorProfilePicture} alt="Profile" className="h-full w-full object-cover" /> : "P"}
+                </span>
                 by {listing.creator}
               </a>
             </div>

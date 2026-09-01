@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase";
 
 type Account = {
   accountId: string;
@@ -37,28 +38,28 @@ export default function PublicCreatorProfilePage() {
   useEffect(() => {
     if (!params.id) return;
 
-    const currentRaw = window.localStorage.getItem("ithinkly_account");
-    const current = currentRaw ? JSON.parse(currentRaw) : null;
-    if (current?.accountId === params.id) {
-      router.replace("/creator-profile");
-      return;
-    }
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.id === params.id) {
+        router.replace("/creator-profile");
+        return;
+      }
 
-    const publicRaw = window.sessionStorage.getItem(`ithinkly_public_account_${params.id}`);
-    const publicAccount = publicRaw ? JSON.parse(publicRaw) : null;
-    if (!publicAccount) return;
+      const publicRaw = window.sessionStorage.getItem(`ithinkly_public_account_${params.id}`);
+      const publicAccount = publicRaw ? JSON.parse(publicRaw) : null;
+      if (!publicAccount) return;
 
-    setAccount(publicAccount);
-    setSelections({
-      ...defaultSelections,
-      ...(publicAccount.creatorProfile || {}),
+      setAccount(publicAccount);
+      setSelections({
+        ...defaultSelections,
+        ...(publicAccount.creatorProfile || {}),
+      });
+
+      const listingsRaw = window.localStorage.getItem("ithinkly_listings");
+      const listings = listingsRaw ? JSON.parse(listingsRaw) : [];
+      setProducts(
+        listings.filter((listing: Listing) => listing.creatorAccountId === params.id),
+      );
     });
-
-    const listingsRaw = window.localStorage.getItem("ithinkly_listings");
-    const listings = listingsRaw ? JSON.parse(listingsRaw) : [];
-    setProducts(
-      listings.filter((listing: Listing) => listing.creatorAccountId === params.id),
-    );
   }, [params.id, router]);
 
   if (!account) return null;

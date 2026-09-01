@@ -40,11 +40,11 @@ export default function SellerBankDetailsPage() {
         router.replace("/account");
         return;
       }
-      const existingAccount = window.localStorage.getItem("ithinkly_account");
+      const existingAccount = window.localStorage.getItem(`ithinkly_account_${data.session.user.id}`);
       const parsedAccount = existingAccount ? JSON.parse(existingAccount) : {};
 
       window.localStorage.setItem(
-        "ithinkly_account",
+        `ithinkly_account_${data.session.user.id}`,
         JSON.stringify({
           ...parsedAccount,
           accountId: data.session.user.id,

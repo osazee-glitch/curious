@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase";
 
 type PublicAccount = {
   accountId: string;
@@ -19,15 +20,15 @@ export default function PublicProfilePage() {
   useEffect(() => {
     if (!params.id) return;
 
-    const currentRaw = window.localStorage.getItem("ithinkly_account");
-    const current = currentRaw ? JSON.parse(currentRaw) : null;
-    if (current?.accountId === params.id) {
-      router.replace("/profile");
-      return;
-    }
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.id === params.id) {
+        router.replace("/profile");
+        return;
+      }
 
-    const publicRaw = window.sessionStorage.getItem(`ithinkly_public_account_${params.id}`);
-    if (publicRaw) setAccount(JSON.parse(publicRaw));
+      const publicRaw = window.sessionStorage.getItem(`ithinkly_public_account_${params.id}`);
+      if (publicRaw) setAccount(JSON.parse(publicRaw));
+    });
   }, [params.id, router]);
 
   if (!account) return null;

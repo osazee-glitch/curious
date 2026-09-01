@@ -46,7 +46,7 @@ export default function CreatorProfilePage() {
         : parsedLegacyAccount?.accountId === data.session.user.id
           ? { ...defaultAccount, ...parsedLegacyAccount }
           : { ...defaultAccount, accountId: data.session.user.id };
-      const storedSellerProfile = window.localStorage.getItem(SELLER_PROFILE_KEY);
+      const storedSellerProfile = window.localStorage.getItem(`${SELLER_PROFILE_KEY}_${data.session.user.id}`);
       const parsedSellerProfile = storedSellerProfile
         ? JSON.parse(storedSellerProfile)
         : parsedAccount.creatorProfile || defaultSellerSelections;

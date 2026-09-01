@@ -10,6 +10,7 @@ export default function EditProfilePage() {
   const router = useRouter();
   const [account, setAccount] = useState({
     accountId: "",
+    profilePicture: "",
     username: "",
     age: 0,
     country: "",
@@ -72,7 +73,7 @@ export default function EditProfilePage() {
             accountId: data.session.user.id,
           };
 
-      setAccount(nextAccount);
+          setAccount({ ...nextAccount, email: data.session.user.email || nextAccount.email });
       setConfirmed(false);
     });
   }, []);
@@ -83,15 +84,37 @@ export default function EditProfilePage() {
     if (typeof window === "undefined") return;
 
     const form = new FormData(event.currentTarget);
+    const currentUser = (await supabase.auth.getUser()).data.user;
+    if (!currentUser) {
+      router.replace("/market");
+      return;
+    }
+
+    const email = String(form.get("email") || account.email).trim();
+    if (email && email !== (currentUser.email || "")) {
+      const { error } = await supabase.auth.updateUser(
+        { email },
+        { emailRedirectTo: "https://ithinkly.com/auth/callback?from=edit" },
+      );
+
+      if (error) {
+        setConfirmed(false);
+        return;
+      }
+
+      router.push(`/confirm-email?from=edit&email=${encodeURIComponent(email)}`);
+      return;
+    }
+
     const nextAccount = {
       ...account,
-      accountId: (await supabase.auth.getUser()).data.user?.id || account.accountId,
+      accountId: currentUser.id,
       username: String(form.get("username") || account.username),
       age: Number(form.get("age") || account.age),
       country: String(form.get("country") || account.country),
       deliveryAddress: String(form.get("deliveryAddress") || account.deliveryAddress),
       postcode: String(form.get("postcode") || account.postcode),
-      email: String(form.get("email") || account.email),
+      email: currentUser.email || account.email,
       isCreator: Boolean(account.isCreator),
     };
 
@@ -133,7 +156,11 @@ export default function EditProfilePage() {
 
             <div className="mb-8 flex justify-center">
               <div className="flex h-32 w-32 items-center justify-center rounded-full border border-zinc-200 bg-zinc-100 text-2xl font-medium text-zinc-500">
-                P
+                {account.profilePicture ? (
+                  <img src={account.profilePicture} alt="Profile" className="h-full w-full object-cover" />
+                ) : (
+                  "P"
+                )}
               </div>
             </div>
 
@@ -226,7 +253,8 @@ export default function EditProfilePage() {
                   id="email"
                   name="email"
                   type="email"
-                  defaultValue={account.email}
+                  value={account.email}
+                  onChange={(event) => setAccount((current) => ({ ...current, email: event.target.value }))}
                   className="w-full rounded-full border border-zinc-200 bg-white px-4 py-3 text-base text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-zinc-400"
                 />
                 {confirmed ? (

@@ -12,6 +12,7 @@ type Product = {
   price: number;
   stock?: number;
   creator: string;
+  creatorProfilePicture?: string;
   category: (typeof categories)[number];
   accent: string;
   code: string;
@@ -34,34 +35,43 @@ export default function CreatorMarketPage() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const accountRaw = window.localStorage.getItem("ithinkly_account");
-      const account = accountRaw ? JSON.parse(accountRaw) : null;
-      const creatorState = account?.isCreator === true;
-
-      supabase.auth.getSession().then(({ data }) => setSignedIn(Boolean(data.session)));
+      supabase.auth.getSession().then(({ data }) => {
+        setSignedIn(Boolean(data.session));
+        const accountRaw = data.session
+          ? window.localStorage.getItem(`ithinkly_account_${data.session.user.id}`)
+          : null;
+        const account = accountRaw ? JSON.parse(accountRaw) : null;
+        setIsCreator(account?.isCreator === true);
+      });
       const {
         data: { subscription },
       } = supabase.auth.onAuthStateChange((_event, session) => setSignedIn(Boolean(session)));
-      setIsCreator(creatorState);
-
       const listingsRaw = window.localStorage.getItem("ithinkly_listings");
       if (listingsRaw) {
         const parsedListings = JSON.parse(listingsRaw);
-        const convertedListings = parsedListings.map((listing: any) => ({
-          id: Number(listing.id) || Date.now(),
-          name: listing.productName || "Untitled product",
-          description: listing.productDescription || "",
-          price: Number(listing.price) || 0,
-          stock: Number.isInteger(Number(listing.stock)) && Number(listing.stock) >= 0 ? Number(listing.stock) : undefined,
-          creator: listing.creatorUsername || "Unknown creator",
-          category: listing.productCategory || "Inventions",
-          accent: "bg-zinc-200",
-          code: "NEW",
-          media: Array.isArray(listing.media) ? listing.media : [],
-          creatorAccountId: listing.creatorAccountId || listing.creatorAccount?.accountId || "",
-          creatorAccount: listing.creatorAccount || undefined,
-        }));
+        const convertedListings = parsedListings.map((listing: any) => {
+          const creatorAccountId = listing.creatorAccountId || listing.creatorAccount?.accountId || "";
+          const creatorRaw = creatorAccountId
+            ? window.localStorage.getItem(`ithinkly_account_${creatorAccountId}`)
+            : null;
+          const creatorAccount = creatorRaw ? JSON.parse(creatorRaw) : listing.creatorAccount;
 
+          return {
+            id: Number(listing.id) || Date.now(),
+            name: listing.productName || "Untitled product",
+            description: listing.productDescription || "",
+            price: Number(listing.price) || 0,
+            stock: Number.isInteger(Number(listing.stock)) && Number(listing.stock) >= 0 ? Number(listing.stock) : undefined,
+            creator: creatorAccount?.username || listing.creatorUsername || "Unknown creator",
+            category: listing.productCategory || "Inventions",
+            accent: "bg-zinc-200",
+            code: "NEW",
+            media: Array.isArray(listing.media) ? listing.media : [],
+            creatorAccountId,
+            creatorAccount: creatorAccount || undefined,
+            creatorProfilePicture: creatorAccount?.profilePicture || "",
+          };
+        });
         setPostedListings(convertedListings);
       }
 
@@ -460,8 +470,15 @@ export default function CreatorMarketPage() {
                       <a
                         href={product.creatorAccountId ? `/creator-profile/${product.creatorAccountId}` : "/creator-profile"}
                         onClick={(event) => event.stopPropagation()}
-                        className="hover:text-zinc-900 hover:underline"
+                        className="flex items-center gap-2 hover:text-zinc-900 hover:underline"
                       >
+                          <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-zinc-100 text-xs text-zinc-500">
+                            {product.creatorProfilePicture ? (
+                              <img src={product.creatorProfilePicture} alt="Profile" className="h-full w-full object-cover" />
+                            ) : (
+                              "P"
+                            )}
+                          </span>
                         by {product.creator}
                       </a>
                       <button
