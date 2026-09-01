@@ -90,8 +90,12 @@ export default function SellPage() {
 
     if (typeof window !== "undefined") {
       const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        router.replace("/account");
+        return;
+      }
       const existingAccount = window.localStorage.getItem(`${ACCOUNT_KEY}_${data.session.user.id}`);
-      if (!data.session || !existingAccount) {
+      if (!existingAccount) {
         router.replace("/account");
         return;
       }

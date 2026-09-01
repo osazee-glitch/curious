@@ -29,6 +29,7 @@ type Listing = {
   stock?: number;
   category: string;
   creator: string;
+  creatorProfilePicture?: string;
   description: string;
   media: MediaItem[];
   reviews: Review[];
