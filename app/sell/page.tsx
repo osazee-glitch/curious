@@ -103,6 +103,19 @@ export default function SellPage() {
         },
       };
 
+      const nextUserProfile = {
+        ...parsedAccount,
+        id: data.session.user.id,
+        username: parsedAccount.username ?? "",
+        age: Number(parsedAccount.age ?? 0),
+        country: parsedAccount.country || "United Kingdom",
+        deliveryAddress: parsedAccount.deliveryAddress ?? "",
+        postcode: parsedAccount.postcode ?? "",
+        profilePicture: parsedAccount.profilePicture ?? "",
+        email: data.session.user.email || parsedAccount.email || "",
+        isCreator: true,
+      };
+
       window.localStorage.setItem(
         `${ACCOUNT_KEY}_${data.session.user.id}`,
         JSON.stringify(nextAccount),
@@ -112,13 +125,7 @@ export default function SellPage() {
         JSON.stringify(nextAccount.creatorProfile),
       );
 
-      await saveUserProfile(data.session.user.id, {
-        ...parsedAccount,
-        id: data.session.user.id,
-        email: data.session.user.email || parsedAccount.email || "",
-        isCreator: true,
-        country: "United Kingdom",
-      });
+      await saveUserProfile(data.session.user.id, nextUserProfile);
 
       await saveCreatorProfile(data.session.user.id, {
         userId: data.session.user.id,

@@ -48,7 +48,20 @@ export default function SellerBankDetailsPage() {
         accountId: data.session.user.id,
         isCreator: true,
         bankDetails: { ...form },
-        country: "United Kingdom",
+        country: parsedAccount.country || "United Kingdom",
+      };
+
+      const nextUserProfile = {
+        ...parsedAccount,
+        id: data.session.user.id,
+        username: parsedAccount.username ?? "",
+        age: Number(parsedAccount.age ?? 0),
+        country: parsedAccount.country || "United Kingdom",
+        deliveryAddress: parsedAccount.deliveryAddress ?? "",
+        postcode: parsedAccount.postcode ?? "",
+        profilePicture: parsedAccount.profilePicture ?? "",
+        email: data.session.user.email || parsedAccount.email || "",
+        isCreator: true,
       };
 
       window.localStorage.setItem(
@@ -56,13 +69,7 @@ export default function SellerBankDetailsPage() {
         JSON.stringify(nextAccount),
       );
 
-      await saveUserProfile(data.session.user.id, {
-        ...parsedAccount,
-        id: data.session.user.id,
-        email: data.session.user.email || parsedAccount.email || "",
-        country: "United Kingdom",
-        isCreator: true,
-      });
+      await saveUserProfile(data.session.user.id, nextUserProfile);
 
       await saveCreatorProfile(data.session.user.id, {
         userId: data.session.user.id,

@@ -128,7 +128,7 @@ export default function EditProfilePage() {
       accountId: currentUser.id,
       username: String(form.get("username") || account.username),
       age: Number(form.get("age") || account.age),
-      country: "United Kingdom",
+      country: String(form.get("country") || account.country || "United Kingdom"),
       deliveryAddress: String(form.get("deliveryAddress") || account.deliveryAddress),
       postcode: String(form.get("postcode") || account.postcode),
       email: currentUser.email || account.email,
@@ -233,8 +233,9 @@ export default function EditProfilePage() {
                   Country
                 </label>
                 <div className="rounded-full border border-zinc-200 bg-zinc-50 px-4 py-3 text-base text-zinc-600">
-                  United Kingdom
+                  {account.country || "United Kingdom"}
                 </div>
+                <input type="hidden" name="country" value={account.country || "United Kingdom"} />
               </div>
 
               <div>

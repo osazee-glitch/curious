@@ -56,7 +56,13 @@ export default function CreatorProfilePage() {
         ...(profileFromSupabase || {}),
         accountId: userId,
         isCreator: true,
-        country: "United Kingdom",
+        username: profileFromSupabase?.username ?? parsedAccount?.username ?? "",
+        age: Number(profileFromSupabase?.age ?? parsedAccount?.age ?? 0),
+        country: profileFromSupabase?.country ?? parsedAccount?.country ?? defaultAccount.country,
+        deliveryAddress: profileFromSupabase?.deliveryAddress ?? parsedAccount?.deliveryAddress ?? "",
+        postcode: profileFromSupabase?.postcode ?? parsedAccount?.postcode ?? "",
+        profilePicture: profileFromSupabase?.profilePicture ?? parsedAccount?.profilePicture ?? "",
+        email: data.session.user.email || profileFromSupabase?.email || parsedAccount?.email || "",
       };
 
       const storedSellerProfile = window.localStorage.getItem(`${SELLER_PROFILE_KEY}_${userId}`);
