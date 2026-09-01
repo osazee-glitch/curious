@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import { loadUserProfile, saveUserProfile } from "../../lib/supabase-data";
 
 const ACCOUNT_KEY = "ithinkly_account";
 
@@ -13,7 +14,7 @@ export default function EditProfilePage() {
     profilePicture: "",
     username: "",
     age: 0,
-    country: "",
+    country: "United Kingdom",
     deliveryAddress: "",
     postcode: "",
     email: "",
@@ -35,13 +36,29 @@ export default function EditProfilePage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       if (!data.session) {
         router.replace("/market");
         return;
       }
 
-      const accountKey = `${ACCOUNT_KEY}_${data.session.user.id}`;
+      const userId = data.session.user.id;
+      const accountKey = `${ACCOUNT_KEY}_${userId}`;
+      
+      // Try loading from Supabase first
+      const supabaseProfile = await loadUserProfile(userId);
+      
+      if (supabaseProfile) {
+        setAccount({ 
+          ...supabaseProfile, 
+          accountId: userId,
+          email: data.session.user.email || supabaseProfile.email 
+        });
+        setConfirmed(false);
+        return;
+      }
+
+      // Fall back to localStorage if Supabase doesn't have it yet
       const storedAccount = window.localStorage.getItem(accountKey);
       const legacyAccount = window.localStorage.getItem(ACCOUNT_KEY);
       const parsedLegacyAccount = legacyAccount ? JSON.parse(legacyAccount) : null;
@@ -49,34 +66,34 @@ export default function EditProfilePage() {
         ? {
             username: "",
             age: 0,
-            country: "",
+            country: "United Kingdom",
             deliveryAddress: "",
             postcode: "",
             email: "",
             isCreator: false,
             ...JSON.parse(storedAccount),
-            accountId: data.session.user.id,
+            accountId: userId,
           }
-        : parsedLegacyAccount?.accountId === data.session.user.id
+        : parsedLegacyAccount?.accountId === userId
           ? {
             ...parsedLegacyAccount,
-            accountId: data.session.user.id,
+            accountId: userId,
           }
           : {
             username: "",
             age: 0,
-            country: "",
+            country: "United Kingdom",
             deliveryAddress: "",
             postcode: "",
             email: "",
             isCreator: false,
-            accountId: data.session.user.id,
+            accountId: userId,
           };
 
-          setAccount({ ...nextAccount, email: data.session.user.email || nextAccount.email });
+        setAccount({ ...nextAccount, email: data.session.user.email || nextAccount.email });
       setConfirmed(false);
     });
-  }, []);
+  }, [router]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -111,17 +128,22 @@ export default function EditProfilePage() {
       accountId: currentUser.id,
       username: String(form.get("username") || account.username),
       age: Number(form.get("age") || account.age),
-      country: String(form.get("country") || account.country),
+      country: "United Kingdom",
       deliveryAddress: String(form.get("deliveryAddress") || account.deliveryAddress),
       postcode: String(form.get("postcode") || account.postcode),
       email: currentUser.email || account.email,
       isCreator: Boolean(account.isCreator),
     };
 
+    // Save to both localStorage and Supabase
     window.localStorage.setItem(
       `${ACCOUNT_KEY}_${nextAccount.accountId}`,
       JSON.stringify(nextAccount),
     );
+    
+    // Also save to Supabase
+    await saveUserProfile(nextAccount.accountId, nextAccount);
+    
     setAccount(nextAccount);
     router.push(nextAccount.isCreator ? "/creator-profile" : "/profile");
   };
@@ -210,13 +232,9 @@ export default function EditProfilePage() {
                 <label htmlFor="country" className="mb-2 block text-sm text-zinc-600">
                   Country
                 </label>
-                <input
-                  id="country"
-                  name="country"
-                  type="text"
-                  defaultValue={account.country}
-                  className="w-full rounded-full border border-zinc-200 bg-white px-4 py-3 text-base text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-zinc-400"
-                />
+                <div className="rounded-full border border-zinc-200 bg-zinc-50 px-4 py-3 text-base text-zinc-600">
+                  United Kingdom
+                </div>
               </div>
 
               <div>

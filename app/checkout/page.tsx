@@ -56,8 +56,7 @@ export default function CheckoutPage() {
         </a>
 
         <div className="mt-8 border-b border-zinc-200 pb-8">
-          <p className="text-xs uppercase tracking-[0.24em] text-zinc-400">Checkout</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Checkout</h1>
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Checkout</h1>
         </div>
 
         {submitted ? (
@@ -84,7 +83,7 @@ export default function CheckoutPage() {
                   </div>
                   <div>
                     <label htmlFor="country" className="mb-2 block text-sm text-zinc-600">Country *</label>
-                    <input id="country" name="country" defaultValue={account.country || ""} required readOnly={Boolean(account.country)} className="w-full rounded-full border border-zinc-200 bg-white px-4 py-3 outline-none read-only:bg-zinc-50" />
+                    <input id="country" name="country" defaultValue="United Kingdom" required readOnly className="w-full rounded-full border border-zinc-200 bg-white px-4 py-3 outline-none read-only:bg-zinc-50" />
                   </div>
                   <div>
                     <label htmlFor="city" className="mb-2 block text-sm text-zinc-600">City *</label>

@@ -3,13 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
+import { saveUserProfile } from "../lib/supabase-data";
 
 const ACCOUNT_KEY = "ithinkly_account";
 
 const defaultAccount = {
   username: "",
   age: 0,
-  country: "",
+  country: "United Kingdom",
   email: "",
   deliveryAddress: "",
   postcode: "",
@@ -55,6 +56,9 @@ export default function SignInPage() {
       };
 
       window.localStorage.setItem(accountKey, JSON.stringify(nextAccount));
+      
+      // Also save to Supabase to ensure persistence
+      await saveUserProfile(data.user.id, { ...nextAccount, email: data.user.email || "" });
 
       router.push(nextAccount.isCreator ? "/creator-profile" : "/profile");
       return;

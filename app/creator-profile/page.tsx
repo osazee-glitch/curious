@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { loadCreatorProfile, loadUserProfile, saveCreatorProfile, saveUserProfile } from "../lib/supabase-data";
 import { supabase } from "../lib/supabase";
 
 const ACCOUNT_KEY = "ithinkly_account";
@@ -11,7 +12,7 @@ const defaultAccount = {
   profilePicture: "",
   username: "",
   age: 0,
-  country: "",
+  country: "United Kingdom",
   email: "",
   isCreator: false,
 };
@@ -31,33 +32,66 @@ export default function CreatorProfilePage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       if (!data.session) {
         router.replace("/market");
         return;
       }
 
-      const accountKey = `${ACCOUNT_KEY}_${data.session.user.id}`;
+      const userId = data.session.user.id;
+      const accountKey = `${ACCOUNT_KEY}_${userId}`;
       const storedAccount = window.localStorage.getItem(accountKey);
       const legacyAccount = window.localStorage.getItem(ACCOUNT_KEY);
       const parsedLegacyAccount = legacyAccount ? JSON.parse(legacyAccount) : null;
       const parsedAccount = storedAccount
         ? { ...defaultAccount, ...JSON.parse(storedAccount) }
-        : parsedLegacyAccount?.accountId === data.session.user.id
+        : parsedLegacyAccount?.accountId === userId
           ? { ...defaultAccount, ...parsedLegacyAccount }
-          : { ...defaultAccount, accountId: data.session.user.id };
-      const storedSellerProfile = window.localStorage.getItem(`${SELLER_PROFILE_KEY}_${data.session.user.id}`);
+          : { ...defaultAccount, accountId: userId };
+
+      const profileFromSupabase = await loadUserProfile(userId);
+      const mergedAccount = {
+        ...defaultAccount,
+        ...parsedAccount,
+        ...(profileFromSupabase || {}),
+        accountId: userId,
+        isCreator: true,
+        country: "United Kingdom",
+      };
+
+      const storedSellerProfile = window.localStorage.getItem(`${SELLER_PROFILE_KEY}_${userId}`);
       const parsedSellerProfile = storedSellerProfile
         ? JSON.parse(storedSellerProfile)
         : parsedAccount.creatorProfile || defaultSellerSelections;
-
-      const nextAccount = { ...parsedAccount, accountId: data.session.user.id, isCreator: true };
-      window.localStorage.setItem(accountKey, JSON.stringify(nextAccount));
-      setAccount(nextAccount);
-      setSellerSelections({
+      const creatorProfile = await loadCreatorProfile(userId);
+      const normalizedSellerProfile = {
         ...defaultSellerSelections,
         ...parsedSellerProfile,
-      });
+        ...(creatorProfile ? {
+          selling: creatorProfile.sellingOptions || [],
+          productType: creatorProfile.productTypes || [],
+          powered: creatorProfile.powerOptions || [],
+          delivery: creatorProfile.deliveryOptions || [],
+        } : {}),
+      };
+
+      window.localStorage.setItem(accountKey, JSON.stringify(mergedAccount));
+      if (profileFromSupabase) {
+        await saveUserProfile(userId, { ...mergedAccount, email: data.session.user.email || mergedAccount.email, isCreator: true });
+      }
+      if (creatorProfile || parsedSellerProfile?.selling || parsedSellerProfile?.delivery || parsedSellerProfile?.powered || parsedSellerProfile?.productType) {
+        await saveCreatorProfile(userId, {
+          userId,
+          sellingOptions: normalizedSellerProfile.selling,
+          productTypes: normalizedSellerProfile.productType,
+          powerOptions: normalizedSellerProfile.powered,
+          deliveryOptions: normalizedSellerProfile.delivery,
+          bankDetails: creatorProfile?.bankDetails || null,
+        });
+      }
+
+      setAccount(mergedAccount);
+      setSellerSelections(normalizedSellerProfile);
     });
   }, [router]);
 
@@ -93,10 +127,7 @@ export default function CreatorProfilePage() {
         <section className="flex flex-1 items-center justify-center py-12">
           <div className="w-full max-w-3xl rounded-[28px] border border-zinc-200 bg-white p-6 sm:p-8">
             <div className="mb-8">
-              <p className="text-xs uppercase tracking-[0.24em] text-zinc-400">
-                Creator profile
-              </p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
                 Creator Profile
               </h1>
             </div>

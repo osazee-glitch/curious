@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { loadListingById, saveReview } from "../../lib/supabase-data";
 import { supabase } from "../../lib/supabase";
 
 type MediaItem = {
@@ -95,7 +96,50 @@ export default function ListingDetailPage() {
   const [reviewOpen, setReviewOpen] = useState(false);
 
   useEffect(() => {
-    if (params.id) setListing(getListing(params.id));
+    if (!params.id) return;
+
+    const loadCurrentListing = async () => {
+      const fromStorage = getListing(params.id);
+      if (fromStorage) {
+        setListing(fromStorage);
+      }
+
+      const fromSupabase = await loadListingById(params.id);
+      if (fromSupabase) {
+        const creatorAccountId = fromSupabase.creatorUserId;
+        const creatorRaw = creatorAccountId ? window.localStorage.getItem(`ithinkly_account_${creatorAccountId}`) : null;
+        const creatorAccount = creatorRaw ? JSON.parse(creatorRaw) : null;
+        const listingForDisplay: Listing = {
+          id: Number(fromSupabase.id),
+          name: fromSupabase.productName || "Untitled product",
+          price: Number(fromSupabase.price) || 0,
+          stock: Number.isInteger(Number(fromSupabase.stock)) && Number(fromSupabase.stock) >= 0 ? Number(fromSupabase.stock) : undefined,
+          category: fromSupabase.productCategory || "Inventions",
+          creator: creatorAccount?.username || "Unknown creator",
+          creatorProfilePicture: creatorAccount?.profilePicture || "",
+          description: fromSupabase.productDescription || "",
+          media: (fromSupabase.media || []).map((item) => ({
+            url: item.url,
+            type: item.type === "video" ? "video/mp4" : "image/jpeg",
+            name: item.id,
+            size: 0,
+          })),
+          reviews: (fromSupabase.reviews || []).map((review) => ({
+            id: review.id,
+            reviewerAccountId: review.reviewerUserId,
+            buyerUsername: review.buyerUsername || "Buyer",
+            reviewerProfilePicture: review.reviewerProfilePicture || "",
+            reviewerIsCreator: false,
+            text: review.text,
+            createdAt: review.createdAt,
+          })),
+          creatorAccountId: creatorAccountId,
+        };
+        setListing(listingForDisplay);
+      }
+    };
+
+    loadCurrentListing();
     supabase.auth.getUser().then(({ data }) => {
       setCurrentAccountId(data.user?.id || "");
     });
@@ -112,7 +156,24 @@ export default function ListingDetailPage() {
     );
   }
 
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+
   const currentMedia = listing.media[mediaIndex];
+
+  const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    setTouchStartX(event.touches[0]?.clientX ?? null);
+  };
+
+  const handleTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (touchStartX === null || listing.media.length <= 1) return;
+    const touchEndX = event.changedTouches[0]?.clientX ?? touchStartX;
+    const diff = touchStartX - touchEndX;
+
+    if (Math.abs(diff) > 50) {
+      setMediaIndex((index) => (diff > 0 ? (index + 1) % listing.media.length : (index - 1 + listing.media.length) % listing.media.length));
+    }
+    setTouchStartX(null);
+  };
 
   const addToBasket = () => {
     setAddedToBasket(true);
@@ -124,14 +185,21 @@ export default function ListingDetailPage() {
 
     const accountRaw = window.localStorage.getItem(`ithinkly_account_${currentAccountId}`);
     const account = accountRaw ? JSON.parse(accountRaw) : {};
+    const savedReview = await saveReview({
+      listingId: String(listing.id),
+      reviewerUserId: currentAccountId,
+      reviewText: text,
+      rating: 0,
+    });
+
     const review = {
-      id: crypto.randomUUID(),
+      id: savedReview?.id || crypto.randomUUID(),
       reviewerAccountId: currentAccountId,
       buyerUsername: account.username || "Buyer",
       reviewerProfilePicture: account.profilePicture || "",
       reviewerIsCreator: account.isCreator === true,
       text,
-      createdAt: new Date().toISOString(),
+      createdAt: savedReview?.createdAt || new Date().toISOString(),
     };
     const storedListings = window.localStorage.getItem("ithinkly_listings");
     const listings = storedListings ? JSON.parse(storedListings) : [];
@@ -139,14 +207,14 @@ export default function ListingDetailPage() {
       (storedListing: { id: number | string }) => String(storedListing.id) === String(listing.id),
     );
 
-    if (listingIndex === -1) return;
-
-    const updatedListing = {
-      ...listings[listingIndex],
-      reviews: [...(Array.isArray(listings[listingIndex].reviews) ? listings[listingIndex].reviews : []), review],
-    };
-    listings[listingIndex] = updatedListing;
-    window.localStorage.setItem("ithinkly_listings", JSON.stringify(listings));
+    if (listingIndex !== -1) {
+      const updatedListing = {
+        ...listings[listingIndex],
+        reviews: [...(Array.isArray(listings[listingIndex].reviews) ? listings[listingIndex].reviews : []), review],
+      };
+      listings[listingIndex] = updatedListing;
+      window.localStorage.setItem("ithinkly_listings", JSON.stringify(listings));
+    }
     setListing({ ...listing, reviews: [...listing.reviews, review] });
     setReviewText("");
     setReviewOpen(false);
@@ -176,7 +244,11 @@ export default function ListingDetailPage() {
         </a>
 
         <section className="mt-8">
-          <div className="flex min-h-[420px] items-center justify-center overflow-hidden rounded-2xl bg-zinc-100 sm:min-h-[560px]">
+          <div
+            className="flex min-h-[420px] items-center justify-center overflow-hidden rounded-2xl bg-zinc-100 sm:min-h-[560px]"
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
             {currentMedia ? (
               currentMedia.type.startsWith("video/") ? (
                 <video

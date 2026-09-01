@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { mergeListingsByIdentity, saveListing, uploadListingMedia } from "../../lib/supabase-data";
 import { supabase } from "../../lib/supabase";
 
 const ACCOUNT_KEY = "ithinkly_account";
@@ -29,17 +30,60 @@ export default function NewListingPage() {
   const [mediaFiles, setMediaFiles] = useState<File[]>([]);
   const [validationMessage, setValidationMessage] = useState("");
 
-  const fileToDataUrl = (file: File) =>
-    new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(new Error("Could not read media file."));
-      reader.readAsDataURL(file);
+  const getVideoDuration = (file: File): Promise<number> =>
+    new Promise((resolve, reject) => {
+      const video = document.createElement("video");
+      const objectUrl = URL.createObjectURL(file);
+      video.onloadedmetadata = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(video.duration);
+      };
+      video.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("Could not load video"));
+      };
+      video.src = objectUrl;
     });
 
-  const handleMediaChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const nextFiles = Array.from(event.target.files || []);
-    setMediaFiles(nextFiles);
+  const handleMediaChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    setValidationMessage("");
+
+    const photos: File[] = [];
+    const videos: File[] = [];
+
+    for (const file of files) {
+      if (file.type.startsWith("image/")) {
+        photos.push(file);
+      } else if (file.type.startsWith("video/")) {
+        videos.push(file);
+      }
+    }
+
+    if (photos.length > 5) {
+      setValidationMessage("Maximum 5 photos allowed. Please remove some photos.");
+      return;
+    }
+
+    if (videos.length > 1) {
+      setValidationMessage("Maximum 1 video allowed. Please remove the extra video.");
+      return;
+    }
+
+    if (videos.length > 0) {
+      try {
+        const duration = await getVideoDuration(videos[0]);
+        if (duration > 90) {
+          setValidationMessage("Video duration must be 90 seconds or less.");
+          return;
+        }
+      } catch (error) {
+        setValidationMessage("Could not validate video. Please try another file.");
+        return;
+      }
+    }
+
+    setMediaFiles([...photos, ...videos]);
   };
 
   const handlePostListing = async () => {
@@ -59,17 +103,55 @@ export default function NewListingPage() {
     const parsedAccount = storedAccount ? JSON.parse(storedAccount) : null;
     const creatorUsername = parsedAccount?.username || "";
 
-    const media = await Promise.all(
-      mediaFiles.map(async (file) => ({
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        url: await fileToDataUrl(file),
-      })),
-    );
+    if (mediaFiles.length === 0) {
+      setValidationMessage("Please add at least one photo or video before posting your listing.");
+      return;
+    }
+
+    const uploadedMedia = await uploadListingMedia(accountId, mediaFiles);
 
     const listing = {
-      id: Date.now(),
+      id: crypto.randomUUID(),
+      creatorUserId: accountId,
+      productName,
+      productCategory,
+      price: Number(productPrice) || 0,
+      stock,
+      productDescription,
+      media: uploadedMedia.map((item) => ({
+        id: item.id,
+        type: item.type,
+        url: item.url,
+        position: item.position,
+        originalName: mediaFiles[item.position]?.name || "",
+        fileSize: mediaFiles[item.position]?.size || 0,
+      })),
+      createdAt: new Date().toISOString(),
+    };
+
+    const saved = await saveListing({
+      id: listing.id,
+      creatorUserId: accountId,
+      productName: listing.productName,
+      productCategory: listing.productCategory,
+      price: listing.price,
+      stock: listing.stock,
+      productDescription: listing.productDescription,
+      media: listing.media.map((item) => ({
+        id: item.id,
+        type: item.type,
+        url: item.url,
+        position: item.position,
+        originalName: item.originalName,
+        fileSize: item.fileSize,
+      })),
+      createdAt: listing.createdAt,
+    });
+
+    const storedListings = window.localStorage.getItem("ithinkly_listings");
+    const listings = storedListings ? JSON.parse(storedListings) : [];
+    const legacyListing = {
+      id: listing.id,
       creatorAccountId: accountId,
       creatorUsername,
       creatorAccount: parsedAccount || null,
@@ -78,15 +160,31 @@ export default function NewListingPage() {
       price: Number(productPrice) || 0,
       stock,
       productDescription,
-      media,
+      media: uploadedMedia.map((item) => ({ ...item, name: mediaFiles[item.position]?.name || "", size: mediaFiles[item.position]?.size || 0 })),
+      reviews: [],
       createdAt: new Date().toISOString(),
     };
 
-    const storedListings = window.localStorage.getItem("ithinkly_listings");
-    const listings = storedListings ? JSON.parse(storedListings) : [];
-    listings.push(listing);
-
-    window.localStorage.setItem("ithinkly_listings", JSON.stringify(listings));
+    const mergedListings = mergeListingsByIdentity(listings, [legacyListing, saved ? {
+      ...saved,
+      creatorAccountId: accountId,
+      creatorUsername,
+      creatorAccount: parsedAccount || null,
+      media: saved.media.map((m) => ({
+        url: m.url,
+        type: m.type,
+        name: m.id,
+        size: 0,
+      })),
+      reviews: [],
+      productName: saved.productName,
+      productCategory: saved.productCategory,
+      productDescription: saved.productDescription,
+      price: saved.price,
+      stock: saved.stock,
+      createdAt: saved.createdAt,
+    } : null]);
+    window.localStorage.setItem("ithinkly_listings", JSON.stringify(mergedListings));
     window.location.href = "/market";
   };
 
@@ -146,6 +244,9 @@ export default function NewListingPage() {
                 <label className="mb-2 block text-sm text-zinc-600">
                   Product photos &amp; videos
                 </label>
+                <p className="mb-3 text-xs text-zinc-500">
+                  Maximum: 5 photos and 1 video (90 seconds max)
+                </p>
                 <input
                   type="file"
                   accept="image/*,video/*"
@@ -153,6 +254,11 @@ export default function NewListingPage() {
                   onChange={handleMediaChange}
                   className="w-full rounded-full border border-zinc-200 bg-white px-4 py-3 text-base text-zinc-900 file:mr-3 file:rounded-full file:border-0 file:bg-zinc-100 file:px-4 file:py-2 file:text-sm file:font-medium file:text-zinc-700"
                 />
+                {mediaFiles.length > 0 && (
+                  <p className="mt-2 text-xs text-zinc-600">
+                    Selected: {mediaFiles.filter((f) => f.type.startsWith("image/")).length} photo{mediaFiles.filter((f) => f.type.startsWith("image/")).length !== 1 ? "s" : ""}{mediaFiles.some((f) => f.type.startsWith("video/")) && ", 1 video"}
+                  </p>
+                )}
               </div>
 
               <div>

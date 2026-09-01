@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { loadAllListings, mergeListingsByIdentity } from "../lib/supabase-data";
 import { supabase } from "../lib/supabase";
 
 const categories = ["All", "Electronics", "3D Printed", "Inventions"] as const;
@@ -46,10 +47,37 @@ export default function CreatorMarketPage() {
       const {
         data: { subscription },
       } = supabase.auth.onAuthStateChange((_event, session) => setSignedIn(Boolean(session)));
-      const listingsRaw = window.localStorage.getItem("ithinkly_listings");
-      if (listingsRaw) {
-        const parsedListings = JSON.parse(listingsRaw);
-        const convertedListings = parsedListings.map((listing: any) => {
+
+      const loadListings = async () => {
+        const listingsRaw = window.localStorage.getItem("ithinkly_listings");
+        const legacyListings = listingsRaw ? JSON.parse(listingsRaw) : [];
+        const supabaseListings = await loadAllListings();
+
+        const convertedSupabaseListings = supabaseListings.map((listing) => {
+          const creatorAccountId = listing.creatorUserId || "";
+          const creatorRaw = creatorAccountId
+            ? window.localStorage.getItem(`ithinkly_account_${creatorAccountId}`)
+            : null;
+          const creatorAccount = creatorRaw ? JSON.parse(creatorRaw) : null;
+
+          return {
+            id: Number(listing.id) || Date.now(),
+            name: listing.productName || "Untitled product",
+            description: listing.productDescription || "",
+            price: Number(listing.price) || 0,
+            stock: Number.isInteger(Number(listing.stock)) && Number(listing.stock) >= 0 ? Number(listing.stock) : undefined,
+            creator: creatorAccount?.username || "Unknown creator",
+            category: listing.productCategory || "Inventions",
+            accent: "bg-zinc-200",
+            code: "NEW",
+            media: Array.isArray(listing.media) ? listing.media : [],
+            creatorAccountId,
+            creatorAccount: creatorAccount || undefined,
+            creatorProfilePicture: creatorAccount?.profilePicture || "",
+          };
+        });
+
+        const convertedLegacyListings = legacyListings.map((listing: any) => {
           const creatorAccountId = listing.creatorAccountId || listing.creatorAccount?.accountId || "";
           const creatorRaw = creatorAccountId
             ? window.localStorage.getItem(`ithinkly_account_${creatorAccountId}`)
@@ -72,9 +100,13 @@ export default function CreatorMarketPage() {
             creatorProfilePicture: creatorAccount?.profilePicture || "",
           };
         });
-        setPostedListings(convertedListings);
-      }
 
+        const mergedListings = mergeListingsByIdentity(convertedLegacyListings, convertedSupabaseListings);
+        window.localStorage.setItem("ithinkly_listings", JSON.stringify(mergedListings));
+        setPostedListings(mergedListings);
+      };
+
+      loadListings();
       return () => subscription.unsubscribe();
     }
   }, []);
@@ -352,8 +384,7 @@ export default function CreatorMarketPage() {
               iThinkly Creator Market
             </h1>
             <p className="mt-5 max-w-xl text-base text-zinc-500 sm:text-lg">
-              A marketplace for young inventors and creators to share useful,
-              thoughtfully made products.
+              A marketplace for creators and makers.
             </p>
           </div>
 

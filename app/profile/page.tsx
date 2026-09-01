@@ -5,12 +5,13 @@ import { useEffect, useState } from "react";
 
 const ACCOUNT_KEY = "ithinkly_account";
 import { supabase } from "../lib/supabase";
+import { getOrCreateUserProfile, loadUserProfile } from "../lib/supabase-data";
 
 const defaultAccount = {
   profilePicture: "",
   username: "",
   age: 0,
-  country: "",
+  country: "United Kingdom",
   email: "",
   deliveryAddress: "",
   postcode: "",
@@ -24,23 +25,43 @@ export default function ProfilePage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       if (!data.session) {
         router.replace("/market");
         return;
       }
 
-      const accountKey = `${ACCOUNT_KEY}_${data.session.user.id}`;
-      const storedAccount = window.localStorage.getItem(accountKey);
+      const userId = data.session.user.id;
+      const accountKey = `${ACCOUNT_KEY}_${userId}`;
+      
+      // Try loading from Supabase first (source of truth)
+      const supabaseProfile = await loadUserProfile(userId);
+      
+      if (supabaseProfile) {
+        // Use Supabase data
+        const accountForUser = {
+          ...defaultAccount,
+          ...supabaseProfile,
+          accountId: userId,
+        };
+        window.localStorage.setItem(accountKey, JSON.stringify(accountForUser));
+        setAccount(accountForUser);
+        setReady(true);
+        return;
+      }
+
+      // Fall back to localStorage if Supabase doesn't have the profile yet
+      const accountKey2 = `${ACCOUNT_KEY}_${userId}`;
+      const storedAccount = window.localStorage.getItem(accountKey2);
       const legacyAccount = window.localStorage.getItem(ACCOUNT_KEY);
       const parsedLegacyAccount = legacyAccount ? JSON.parse(legacyAccount) : null;
       const nextAccount = storedAccount
         ? { ...defaultAccount, ...JSON.parse(storedAccount) }
-        : parsedLegacyAccount?.accountId === data.session.user.id
+        : parsedLegacyAccount?.accountId === userId
           ? { ...defaultAccount, ...parsedLegacyAccount }
-          : { ...defaultAccount, accountId: data.session.user.id };
+          : { ...defaultAccount, accountId: userId };
 
-      const accountForUser = { ...nextAccount, accountId: data.session.user.id };
+      const accountForUser = { ...nextAccount, accountId: userId };
       window.localStorage.setItem(accountKey, JSON.stringify(accountForUser));
       setAccount(accountForUser);
       setReady(true);
@@ -85,10 +106,7 @@ export default function ProfilePage() {
         <section className="flex flex-1 items-center justify-center py-12">
           <div className="w-full max-w-2xl rounded-[28px] border border-zinc-200 bg-white p-6 sm:p-8">
             <div className="mb-8">
-              <p className="text-xs uppercase tracking-[0.24em] text-zinc-400">
-                Profile
-              </p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
                 Profile
               </h1>
             </div>

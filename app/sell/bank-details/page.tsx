@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useEffect } from "react";
+import { saveCreatorProfile, saveUserProfile } from "../../lib/supabase-data";
 import { supabase } from "../../lib/supabase";
 
 export default function SellerBankDetailsPage() {
@@ -42,16 +43,35 @@ export default function SellerBankDetailsPage() {
       }
       const existingAccount = window.localStorage.getItem(`ithinkly_account_${data.session.user.id}`);
       const parsedAccount = existingAccount ? JSON.parse(existingAccount) : {};
+      const nextAccount = {
+        ...parsedAccount,
+        accountId: data.session.user.id,
+        isCreator: true,
+        bankDetails: { ...form },
+        country: "United Kingdom",
+      };
 
       window.localStorage.setItem(
         `ithinkly_account_${data.session.user.id}`,
-        JSON.stringify({
-          ...parsedAccount,
-          accountId: data.session.user.id,
-          isCreator: true,
-          bankDetails: { ...form },
-        }),
+        JSON.stringify(nextAccount),
       );
+
+      await saveUserProfile(data.session.user.id, {
+        ...parsedAccount,
+        id: data.session.user.id,
+        email: data.session.user.email || parsedAccount.email || "",
+        country: "United Kingdom",
+        isCreator: true,
+      });
+
+      await saveCreatorProfile(data.session.user.id, {
+        userId: data.session.user.id,
+        sellingOptions: parsedAccount.creatorProfile?.selling || [],
+        productTypes: parsedAccount.creatorProfile?.productType || [],
+        powerOptions: parsedAccount.creatorProfile?.powered || [],
+        deliveryOptions: parsedAccount.creatorProfile?.delivery || [],
+        bankDetails: { ...form },
+      });
     }
 
     setValidationMessage("");

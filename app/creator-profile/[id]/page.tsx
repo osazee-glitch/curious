@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { loadCreatorProfile, loadUserListings, loadUserProfile } from "../../lib/supabase-data";
 import { supabase } from "../../lib/supabase";
 
 type Account = {
@@ -38,7 +39,7 @@ export default function PublicCreatorProfilePage() {
   useEffect(() => {
     if (!params.id) return;
 
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       if (data.user?.id === params.id) {
         router.replace("/creator-profile");
         return;
@@ -46,19 +47,39 @@ export default function PublicCreatorProfilePage() {
 
       const publicRaw = window.sessionStorage.getItem(`ithinkly_public_account_${params.id}`);
       const publicAccount = publicRaw ? JSON.parse(publicRaw) : null;
-      if (!publicAccount) return;
+      const accountFromSupabase = publicAccount || (await loadUserProfile(params.id));
+      if (!accountFromSupabase) return;
 
-      setAccount(publicAccount);
+      const creatorProfile = await loadCreatorProfile(params.id);
+      const effectiveAccount = {
+        ...accountFromSupabase,
+        accountId: params.id,
+        country: accountFromSupabase.country || "United Kingdom",
+        creatorProfile: creatorProfile ? {
+          selling: creatorProfile.sellingOptions,
+          productType: creatorProfile.productTypes,
+          powered: creatorProfile.powerOptions,
+          delivery: creatorProfile.deliveryOptions,
+        } : publicAccount?.creatorProfile || {},
+      };
+
+      setAccount(effectiveAccount);
       setSelections({
         ...defaultSelections,
-        ...(publicAccount.creatorProfile || {}),
+        ...(effectiveAccount.creatorProfile || {}),
       });
 
       const listingsRaw = window.localStorage.getItem("ithinkly_listings");
-      const listings = listingsRaw ? JSON.parse(listingsRaw) : [];
-      setProducts(
-        listings.filter((listing: Listing) => listing.creatorAccountId === params.id),
-      );
+      const localListings = listingsRaw ? JSON.parse(listingsRaw) : [];
+      const supabaseListings = await loadUserListings(params.id);
+      const mergedListings = [...localListings.filter((listing: Listing) => listing.creatorAccountId === params.id), ...supabaseListings.map((listing) => ({
+        id: listing.id,
+        productName: listing.productName,
+        productDescription: listing.productDescription,
+        price: listing.price,
+        creatorAccountId: listing.creatorUserId,
+      }))];
+      setProducts(mergedListings);
     });
   }, [params.id, router]);
 

@@ -2,40 +2,29 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { saveCreatorProfile, saveUserProfile } from "../lib/supabase-data";
 import { supabase } from "../lib/supabase";
 
 const ACCOUNT_KEY = "ithinkly_account";
 const SELLER_PROFILE_KEY = "ithinkly_seller_profile";
 
 const sellOptions = [
-  "3D-printed body/case + electronic module hardware",
-  "3D-printed body/case + custom electronic hardware",
+  "Off-the-shelf electronic hardware",
+  "Custom-designed PCB hardware",
 ];
 
-const productTypeOptions = [
-  "Assistive devices for elderly people",
-  "Assistive devices for children",
-  "Learning devices for kids",
-  "Homeware devices (non-AC powered)",
-  "Remote-controlled toy devices",
-  "Hardware devices",
-  "Home sensors & security devices",
-  "Robotics & moving devices",
-  "Educational & STEM devices",
-  "Desk & workspace devices",
-  "Accessibility devices",
-  "Personal-use devices",
-];
+const sellOptionDetails: Record<string, string> = {
+  "Off-the-shelf electronic hardware":
+    "I am building my product using existing electronic hardware or modules, such as Arduino boards, sensors, motors, drivers, microcontrollers, displays or other electronic components purchased from suppliers or retailers.",
+  "Custom-designed PCB hardware":
+    "I have designed my own PCB or electronic circuit board, combining components such as the microcontroller, drivers, sensors or other electronics into custom-designed hardware.",
+};
 
 const powerOptions = [
-  "1.5V battery — non-rechargeable",
-  "3V battery — non-rechargeable",
-  "6V battery — non-rechargeable",
-  "9V battery — non-rechargeable",
-  "Lithium battery — rechargeable",
-  "5V USB cable",
-  "9V DC cable",
-  "12V DC cable",
+  "Rechargeable",
+  "Non-rechargeable",
+  "AC-to-DC adapter — maximum 12V DC",
+  "Multiple power options",
 ];
 
 const deliveryOptions = ["Royal Mail", "Evri"];
@@ -43,7 +32,6 @@ const deliveryOptions = ["Royal Mail", "Evri"];
 const toggleSelection = <T,>(
   selected: T[],
   value: T,
-  allOptions: T[],
   setSelected: (next: T[]) => void,
 ) => {
   const isSelected = selected.includes(value);
@@ -54,7 +42,7 @@ const toggleSelection = <T,>(
 export default function SellPage() {
   const router = useRouter();
   const [selling, setSelling] = useState<string[]>([]);
-  const [productType, setProductType] = useState<string[]>([]);
+  const [productType, setProductType] = useState("");
   const [powered, setPowered] = useState<string[]>([]);
   const [delivery, setDelivery] = useState<string[]>([]);
   const [agreed, setAgreed] = useState(false);
@@ -75,9 +63,10 @@ export default function SellPage() {
   }, [router]);
 
   const handleContinue = async () => {
+    const productTypeList = productType.trim() ? [productType.trim()] : [];
     const isComplete =
       selling.length > 0 &&
-      productType.length > 0 &&
+      productTypeList.length > 0 &&
       powered.length > 0 &&
       delivery.length > 0 &&
       agreed;
@@ -107,7 +96,7 @@ export default function SellPage() {
         isCreator: true,
         creatorProfile: {
           selling,
-          productType,
+          productType: productTypeList,
           powered,
           delivery,
           agreed,
@@ -122,6 +111,23 @@ export default function SellPage() {
         `${SELLER_PROFILE_KEY}_${data.session.user.id}`,
         JSON.stringify(nextAccount.creatorProfile),
       );
+
+      await saveUserProfile(data.session.user.id, {
+        ...parsedAccount,
+        id: data.session.user.id,
+        email: data.session.user.email || parsedAccount.email || "",
+        isCreator: true,
+        country: "United Kingdom",
+      });
+
+      await saveCreatorProfile(data.session.user.id, {
+        userId: data.session.user.id,
+        sellingOptions: selling,
+        productTypes: productTypeList,
+        powerOptions: powered,
+        deliveryOptions: delivery,
+        bankDetails: parsedAccount.bankDetails || null,
+      });
     }
 
     setValidationMessage("");
@@ -180,10 +186,7 @@ export default function SellPage() {
         <section className="flex flex-1 items-center justify-center py-12">
           <div className="w-full max-w-3xl rounded-[28px] border border-zinc-200 bg-white p-6 sm:p-8">
             <div className="mb-8">
-              <p className="text-xs uppercase tracking-[0.24em] text-zinc-400">
-                Sell
-              </p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
                 SELL ON iThinkly
               </h1>
             </div>
@@ -191,10 +194,12 @@ export default function SellPage() {
             <div className="space-y-3 text-base leading-relaxed text-zinc-700">
               <p>Bring your creativity to life.</p>
               <p>Find a problem. Create a solution. Sell it to people who need it.</p>
-              <p>That’s the purpose of the iThinkly Creator Market.</p>
+              <p>The iThinkly Creator Market is for creators and makers who build useful electronic products and devices.</p>
               <p>
-                This program is strictly for inventors, makers and tech enthusiasts who create
-                useful products and devices.
+                Important: The iThinkly Creator Market is strictly for electronics-based products and devices. Products must contain electronic components or hardware that are part of the product&apos;s function. Standalone 3D-printed products or products without electronic components will not be accepted and may be removed or result in your creator account being banned.
+              </p>
+              <p>
+                iThinkly Creator Market products must use permitted low-voltage DC power sources. Products requiring direct AC/mains power or operating above 12V DC are not permitted.
               </p>
             </div>
 
@@ -202,53 +207,107 @@ export default function SellPage() {
 
             <form className="space-y-6" onSubmit={(event) => event.preventDefault()} noValidate>
               <div>
-                <label className="mb-2 block text-sm text-zinc-600">1. What are you selling?</label>
-                {renderChecklist(sellOptions, selling, (value) => {
-                  toggleSelection(selling, value, sellOptions, setSelling);
-                  setValidationMessage("");
-                  setReadyForNextStep(false);
-                })}
+                <label className="mb-3 block text-sm font-medium text-zinc-700">1. What are you making your product with?</label>
+                <div className="space-y-3">
+                  {sellOptions.map((option) => {
+                    const isSelected = selling.includes(option);
+                    return (
+                      <div key={option} className="rounded-2xl border border-zinc-200 bg-white p-4">
+                        <label
+                          className={[
+                            "flex cursor-pointer items-start gap-3 text-sm transition",
+                            isSelected ? "text-zinc-900" : "text-zinc-700",
+                          ].join(" ")}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {
+                              toggleSelection(selling, option, setSelling);
+                              setValidationMessage("");
+                              setReadyForNextStep(false);
+                            }}
+                            className="mt-1 h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+                          />
+                          <span>
+                            <span className="block font-medium">{option}</span>
+                            <span className="mt-1 block text-sm text-zinc-600">{sellOptionDetails[option]}</span>
+                          </span>
+                        </label>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               <div>
-                <label className="mb-2 block text-sm text-zinc-600">
-                  2. What type of product are you selling?
+                <label htmlFor="product-type" className="mb-2 block text-sm font-medium text-zinc-700">
+                  2. What type of product are you making?
                 </label>
-                {renderChecklist(productTypeOptions, productType, (value) => {
-                  toggleSelection(productType, value, productTypeOptions, setProductType);
-                  setValidationMessage("");
-                  setReadyForNextStep(false);
-                })}
+                <div className="space-y-2">
+                  <textarea
+                    id="product-type"
+                    value={productType}
+                    onChange={(event) => {
+                      setProductType(event.target.value);
+                      setValidationMessage("");
+                      setReadyForNextStep(false);
+                    }}
+                    placeholder="Tell us what you are making..."
+                    rows={4}
+                    className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-base text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-zinc-400"
+                  />
+                  <p className="text-sm text-zinc-500">Product type / description</p>
+                  <p className="text-sm text-zinc-500">Example: Smart plant monitor, accessibility device, educational robot, home sensor, electronic desk device.</p>
+                </div>
               </div>
 
               <div>
-                <label className="mb-2 block text-sm text-zinc-600">
-                  3. How is your product powered?
-                </label>
-                {renderChecklist(powerOptions, powered, (value) => {
-                  toggleSelection(powered, value, powerOptions, setPowered);
-                  setValidationMessage("");
-                  setReadyForNextStep(false);
-                })}
+                <label className="mb-3 block text-sm font-medium text-zinc-700">3. How is your product powered?</label>
+                <div className="space-y-2">
+                  {renderChecklist(powerOptions, powered, (value) => {
+                    toggleSelection(powered, value, setPowered);
+                    setValidationMessage("");
+                    setReadyForNextStep(false);
+                  })}
+                </div>
+                <p className="mt-3 text-sm text-zinc-500">
+                  Products must operate at a maximum of 12V DC. AC-to-DC adapters are permitted only when their DC output does not exceed 12V. Adapters or power supplies exceeding 12V DC are prohibited.
+                </p>
               </div>
 
               <div>
-                <label className="mb-2 block text-sm text-zinc-600">
-                  4. How will you deliver orders to customers?
-                </label>
-                {renderChecklist(deliveryOptions, delivery, (value) => {
-                  toggleSelection(delivery, value, deliveryOptions, setDelivery);
-                  setValidationMessage("");
-                  setReadyForNextStep(false);
-                })}
+                <label className="mb-3 block text-sm font-medium text-zinc-700">4. How will you deliver orders to customers?</label>
+                <div className="space-y-2">
+                  {renderChecklist(deliveryOptions, delivery, (value) => {
+                    toggleSelection(delivery, value, setDelivery);
+                    setValidationMessage("");
+                    setReadyForNextStep(false);
+                  })}
+                </div>
               </div>
 
               <div className="pt-2">
-                <p className="mb-3 text-sm uppercase tracking-[0.18em] text-zinc-400">
-                  iThinkly Creator Market Rules
+                <p className="mb-4 text-sm uppercase tracking-[0.18em] text-zinc-400">
+                  ITHINKLY CREATOR MARKET RULES
                 </p>
 
-                <label className="flex items-start gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-700">
+                <div className="space-y-2 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-700">
+                  <p>By submitting a product to the iThinkly Creator Market, I confirm that:</p>
+                  <ul className="list-disc space-y-1 pl-5">
+                    <li>My product contains electronic components or electronic hardware and is designed to perform a useful function.</li>
+                    <li>I understand that standalone 3D-printed products or products without electronic components are not permitted and may be removed.</li>
+                    <li>My product does not require direct AC/mains power and is designed to operate using permitted low-voltage DC power sources.</li>
+                    <li>Products intended to come into direct contact with food or the mouth are prohibited on iThinkly.</li>
+                    <li>Sexual products, sexual content or products intended for sexual use are prohibited on iThinkly.</li>
+                    <li>I will not submit products that are illegal, dangerous, harmful, or otherwise prohibited under applicable UK laws or regulations.</li>
+                    <li>I am responsible for ensuring that my products comply with applicable UK product safety requirements, laws and regulations.</li>
+                    <li>I will provide accurate information about my product, its components, power source and intended use.</li>
+                    <li>I understand that iThinkly may reject, remove or ban products and/or creator accounts that violate these rules or the iThinkly Creator Market requirements.</li>
+                  </ul>
+                </div>
+
+                <label className="mt-4 flex items-start gap-3 rounded-2xl border border-zinc-200 bg-white p-4 text-sm leading-6 text-zinc-700">
                   <input
                     type="checkbox"
                     checked={agreed}
@@ -259,14 +318,7 @@ export default function SellPage() {
                     }}
                     className="mt-1 h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
                   />
-                  <span>
-                    “I agree that the product I am submitting is DC-powered and does not require
-                    direct AC/mains power. Products intended to come into direct contact with food or
-                    the mouth are strictly prohibited on iThinkly. I understand that products must
-                    comply with applicable UK laws, safety requirements and regulations. I will not
-                    list products that violate iThinkly’s marketplace rules or applicable
-                    regulations.”
-                  </span>
+                  <span>I agree to the iThinkly Creator Market Rules.</span>
                 </label>
               </div>
 
