@@ -1,14 +1,16 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { loadUserProfile, saveUserProfile } from "../../lib/supabase-data";
 
 const ACCOUNT_KEY = "ithinkly_account";
 
-export default function EditProfilePage() {
+function EditProfilePageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = searchParams.get("next");
   const [account, setAccount] = useState({
     accountId: "",
     profilePicture: "",
@@ -145,11 +147,11 @@ export default function EditProfilePage() {
     await saveUserProfile(nextAccount.accountId, nextAccount);
     
     setAccount(nextAccount);
-    router.push(nextAccount.isCreator ? "/creator-profile" : "/profile");
+    router.push(nextPath || (nextAccount.isCreator ? "/creator-profile" : "/profile"));
   };
 
   const handleCancel = () => {
-    router.push(account.isCreator ? "/creator-profile" : "/profile");
+    router.push(nextPath || (account.isCreator ? "/creator-profile" : "/profile"));
   };
 
   return (
@@ -309,5 +311,13 @@ export default function EditProfilePage() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function EditProfilePage() {
+  return (
+    <Suspense fallback={null}>
+      <EditProfilePageContent />
+    </Suspense>
   );
 }

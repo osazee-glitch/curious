@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { saveCreatorProfile, saveUserProfile } from "../lib/supabase-data";
+import { loadUserProfile, saveCreatorProfile, saveUserProfile } from "../lib/supabase-data";
 import { supabase } from "../lib/supabase";
 
 const ACCOUNT_KEY = "ithinkly_account";
@@ -52,12 +52,21 @@ export default function SellPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       const existingAccount = data.session
         ? window.localStorage.getItem(`${ACCOUNT_KEY}_${data.session.user.id}`)
         : null;
       if (!data.session || !existingAccount) {
         router.replace("/account");
+        return;
+      }
+
+      // The database is the source of truth: a creator must have their real
+      // username/age/country/delivery details saved before starting
+      // creator-specific onboarding, otherwise those fields are never collected.
+      const profile = await loadUserProfile(data.session.user.id);
+      if (!profile?.username?.trim()) {
+        router.replace("/profile/edit?next=/sell");
       }
     });
   }, [router]);

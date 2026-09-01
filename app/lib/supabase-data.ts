@@ -162,21 +162,35 @@ export async function loadUserProfile(userId: string): Promise<UserProfile | nul
 
 /**
  * Save user profile to Supabase. Creates or updates the profile.
+ * Merges with the existing row first so that blank/default values from a
+ * partial caller (e.g. a step in the creator onboarding flow) never wipe
+ * out real values already stored in the database.
  */
 export async function saveUserProfile(userId: string, profile: Partial<UserProfile>): Promise<UserProfile | null> {
   try {
+    const existing = await loadUserProfile(userId);
+
+    const username = profile.username?.trim() ? profile.username.trim() : existing?.username ?? "";
+    const age = profile.age ? Number(profile.age) : existing?.age ?? Number(profile.age ?? 0);
+    const country = profile.country || existing?.country || "United Kingdom";
+    const deliveryAddress = profile.deliveryAddress?.trim() ? profile.deliveryAddress : existing?.deliveryAddress ?? "";
+    const postcode = profile.postcode?.trim() ? profile.postcode : existing?.postcode ?? "";
+    const profilePicture = profile.profilePicture || existing?.profilePicture || "";
+    const isCreator = profile.isCreator !== undefined ? Boolean(profile.isCreator) : Boolean(existing?.isCreator);
+    const email = profile.email || existing?.email || "";
+
     const { data, error } = await supabase
       .from("user_profiles")
       .upsert({
         id: userId,
-        username: profile.username ?? "",
-        age: profile.age ?? 0,
-        country: profile.country || "United Kingdom",
-        delivery_address: profile.deliveryAddress ?? "",
-        postcode: profile.postcode ?? "",
-        profile_picture: profile.profilePicture ?? "",
-        is_creator: Boolean(profile.isCreator),
-        email: profile.email ?? "",
+        username,
+        age,
+        country,
+        delivery_address: deliveryAddress,
+        postcode,
+        profile_picture: profilePicture,
+        is_creator: isCreator,
+        email,
         updated_at: new Date().toISOString(),
       }, { onConflict: "id" })
       .select()
