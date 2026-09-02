@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
-import { saveUserProfile } from "../lib/supabase-data";
+import { loadCreatorProfile, loadUserProfile, saveUserProfile } from "../lib/supabase-data";
 
 const ACCOUNT_KEY = "ithinkly_account";
 
@@ -46,21 +46,27 @@ export default function SignInPage() {
     }
 
     if (typeof window !== "undefined") {
+      // Supabase is the source of truth for profile and shop status — never
+      // trust localStorage to decide whether this account owns a shop.
+      const dbProfile = await loadUserProfile(data.user.id);
+      const shop = await loadCreatorProfile(data.user.id);
+      const isCreator = Boolean(dbProfile?.isCreator) || Boolean(shop);
+
       const accountKey = `${ACCOUNT_KEY}_${data.user.id}`;
-      const storedAccount = window.localStorage.getItem(accountKey);
-      const parsedAccount = storedAccount ? JSON.parse(storedAccount) : defaultAccount;
       const nextAccount = {
         ...defaultAccount,
-        ...parsedAccount,
+        ...(dbProfile || {}),
         accountId: data.user.id,
+        isCreator,
+        email: data.user.email || dbProfile?.email || "",
       };
 
       window.localStorage.setItem(accountKey, JSON.stringify(nextAccount));
-      
-      // Also save to Supabase to ensure persistence
-      await saveUserProfile(data.user.id, { ...nextAccount, email: data.user.email || "" });
 
-      router.push(nextAccount.isCreator ? "/creator-profile" : "/profile");
+      // Keep is_creator in sync in case it drifted from the shop's existence.
+      await saveUserProfile(data.user.id, { ...nextAccount, isCreator });
+
+      router.push(isCreator ? "/creator-profile" : "/profile");
       return;
     }
 

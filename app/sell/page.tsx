@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { loadUserProfile, saveCreatorProfile, saveUserProfile } from "../lib/supabase-data";
+import { loadCreatorProfile, loadUserProfile, saveCreatorProfile, saveUserProfile } from "../lib/supabase-data";
 import { supabase } from "../lib/supabase";
 
 const ACCOUNT_KEY = "ithinkly_account";
@@ -67,6 +67,15 @@ export default function SellPage() {
       const profile = await loadUserProfile(data.session.user.id);
       if (!profile?.username?.trim()) {
         router.replace("/profile/edit?next=/sell");
+        return;
+      }
+
+      // An account can only ever open one shop. If creator_profiles already
+      // has a row for this user, they've already been through onboarding —
+      // send them to their existing shop instead of letting them redo it.
+      const existingShop = await loadCreatorProfile(data.session.user.id);
+      if (existingShop) {
+        router.replace("/creator-profile");
       }
     });
   }, [router]);

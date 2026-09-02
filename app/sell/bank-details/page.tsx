@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useEffect } from "react";
-import { saveCreatorProfile, saveUserProfile } from "../../lib/supabase-data";
+import { loadCreatorProfile, saveCreatorProfile, saveUserProfile } from "../../lib/supabase-data";
 import { supabase } from "../../lib/supabase";
 
 export default function SellerBankDetailsPage() {
@@ -17,8 +17,18 @@ export default function SellerBankDetailsPage() {
   const [validationMessage, setValidationMessage] = useState("");
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) router.replace("/account");
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!data.session) {
+        router.replace("/account");
+        return;
+      }
+
+      // Bank details are the final onboarding step; an account that already
+      // has a shop must not be able to re-enter onboarding and overwrite it.
+      const existingShop = await loadCreatorProfile(data.session.user.id);
+      if (existingShop?.bankDetails) {
+        router.replace("/creator-profile");
+      }
     });
   }, [router]);
 

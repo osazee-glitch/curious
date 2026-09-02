@@ -71,6 +71,10 @@ export default function ProfilePage() {
   }, [router]);
 
   const handleSignOut = async () => {
+    const { data } = await supabase.auth.getUser();
+    if (data.user && typeof window !== "undefined") {
+      window.localStorage.removeItem(`${ACCOUNT_KEY}_${data.user.id}`);
+    }
     await supabase.auth.signOut();
     router.push("/market");
   };

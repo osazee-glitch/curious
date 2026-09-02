@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { loadAllListings, mergeListingsByIdentity } from "../lib/supabase-data";
+import { loadAllListings, loadCreatorProfile, loadUserProfile, mergeListingsByIdentity } from "../lib/supabase-data";
 import { supabase } from "../lib/supabase";
 
 const categories = ["All", "Electronics", "3D Printed", "Inventions"] as const;
@@ -36,29 +36,38 @@ export default function CreatorMarketPage() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      supabase.auth.getSession().then(({ data }) => {
+      supabase.auth.getSession().then(async ({ data }) => {
         setSignedIn(Boolean(data.session));
-        const accountRaw = data.session
-          ? window.localStorage.getItem(`ithinkly_account_${data.session.user.id}`)
-          : null;
-        const account = accountRaw ? JSON.parse(accountRaw) : null;
-        setIsCreator(account?.isCreator === true);
+        // Shop status must come from Supabase, not cached localStorage, so it
+        // survives clearing browser data and stays consistent per account.
+        if (data.session) {
+          const profile = await loadUserProfile(data.session.user.id);
+          const shop = await loadCreatorProfile(data.session.user.id);
+          setIsCreator(Boolean(profile?.isCreator) || Boolean(shop));
+        } else {
+          setIsCreator(false);
+        }
       });
       const {
         data: { subscription },
       } = supabase.auth.onAuthStateChange((_event, session) => setSignedIn(Boolean(session)));
+
+      const loadCreatorInfo = async (creatorAccountId: string) => {
+        if (!creatorAccountId) return null;
+        const fromSupabase = await loadUserProfile(creatorAccountId);
+        if (fromSupabase) return fromSupabase;
+        const creatorRaw = window.localStorage.getItem(`ithinkly_account_${creatorAccountId}`);
+        return creatorRaw ? JSON.parse(creatorRaw) : null;
+      };
 
       const loadListings = async () => {
         const listingsRaw = window.localStorage.getItem("ithinkly_listings");
         const legacyListings = listingsRaw ? JSON.parse(listingsRaw) : [];
         const supabaseListings = await loadAllListings();
 
-        const convertedSupabaseListings = supabaseListings.map((listing) => {
+        const convertedSupabaseListings = await Promise.all(supabaseListings.map(async (listing) => {
           const creatorAccountId = listing.creatorUserId || "";
-          const creatorRaw = creatorAccountId
-            ? window.localStorage.getItem(`ithinkly_account_${creatorAccountId}`)
-            : null;
-          const creatorAccount = creatorRaw ? JSON.parse(creatorRaw) : null;
+          const creatorAccount = await loadCreatorInfo(creatorAccountId);
 
           return {
             id: Number(listing.id) || Date.now(),
@@ -75,14 +84,11 @@ export default function CreatorMarketPage() {
             creatorAccount: creatorAccount || undefined,
             creatorProfilePicture: creatorAccount?.profilePicture || "",
           };
-        });
+        }));
 
-        const convertedLegacyListings = legacyListings.map((listing: any) => {
+        const convertedLegacyListings = await Promise.all(legacyListings.map(async (listing: any) => {
           const creatorAccountId = listing.creatorAccountId || listing.creatorAccount?.accountId || "";
-          const creatorRaw = creatorAccountId
-            ? window.localStorage.getItem(`ithinkly_account_${creatorAccountId}`)
-            : null;
-          const creatorAccount = creatorRaw ? JSON.parse(creatorRaw) : listing.creatorAccount;
+          const creatorAccount = (await loadCreatorInfo(creatorAccountId)) || listing.creatorAccount;
 
           return {
             id: Number(listing.id) || Date.now(),
@@ -99,7 +105,7 @@ export default function CreatorMarketPage() {
             creatorAccount: creatorAccount || undefined,
             creatorProfilePicture: creatorAccount?.profilePicture || "",
           };
-        });
+        }));
 
         const mergedListings = mergeListingsByIdentity(convertedLegacyListings, convertedSupabaseListings);
         window.localStorage.setItem("ithinkly_listings", JSON.stringify(mergedListings));
@@ -260,7 +266,7 @@ export default function CreatorMarketPage() {
               >
                 Account
               </a>
-              <a href="/sell" className="w-full rounded-md px-3 py-2 text-left hover:bg-zinc-100">
+              <a href={isCreator ? "/creator-profile" : "/sell"} className="w-full rounded-md px-3 py-2 text-left hover:bg-zinc-100">
                 Sell
               </a>
               <button type="button" className="w-full rounded-md px-3 py-2 text-left hover:bg-zinc-100">

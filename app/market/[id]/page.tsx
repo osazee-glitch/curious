@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { loadListingById, saveReview } from "../../lib/supabase-data";
+import { loadListingById, loadUserProfile, saveReview } from "../../lib/supabase-data";
 import { supabase } from "../../lib/supabase";
 
 type MediaItem = {
@@ -107,8 +107,9 @@ export default function ListingDetailPage() {
       const fromSupabase = await loadListingById(params.id);
       if (fromSupabase) {
         const creatorAccountId = fromSupabase.creatorUserId;
-        const creatorRaw = creatorAccountId ? window.localStorage.getItem(`ithinkly_account_${creatorAccountId}`) : null;
-        const creatorAccount = creatorRaw ? JSON.parse(creatorRaw) : null;
+        // Creator info must come from Supabase so it's correct even if this
+        // browser has never cached that creator's account locally.
+        const creatorAccount = creatorAccountId ? await loadUserProfile(creatorAccountId) : null;
         const listingForDisplay: Listing = {
           id: Number(fromSupabase.id),
           name: fromSupabase.productName || "Untitled product",

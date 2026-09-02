@@ -99,32 +99,32 @@ const buildListingFromRecord = (listing: any): Listing => ({
   createdAt: listing.created_at || listing.createdAt || new Date().toISOString(),
 });
 
+const LISTING_MEDIA_BUCKET = "listing-media";
+
 export async function uploadListingMedia(userId: string, files: File[]): Promise<Array<{ id: string; type: "photo" | "video"; url: string; position: number }>> {
   const uploaded: Array<{ id: string; type: "photo" | "video"; url: string; position: number }> = [];
-  const bucketNames = ["listing-media", "user-uploads", "listings", "creator-market"];
 
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index];
     const fileName = `${Date.now()}-${index}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
     const objectPath = `${userId}/${fileName}`;
-    let publicUrl = "";
 
-    for (const bucketName of bucketNames) {
-      const { error } = await supabase.storage.from(bucketName).upload(objectPath, file, {
-        upsert: true,
-        contentType: file.type,
-        cacheControl: "3600",
-      });
+    const { error: uploadError } = await supabase.storage.from(LISTING_MEDIA_BUCKET).upload(objectPath, file, {
+      upsert: true,
+      contentType: file.type,
+      cacheControl: "3600",
+    });
 
-      if (!error) {
-        const { data } = supabase.storage.from(bucketName).getPublicUrl(objectPath);
-        publicUrl = data.publicUrl || "";
-        break;
-      }
+    if (uploadError) {
+      console.error("Error uploading listing media to Supabase Storage:", uploadError);
+      throw new Error(`Could not upload "${file.name}": ${uploadError.message}`);
     }
 
+    const { data } = supabase.storage.from(LISTING_MEDIA_BUCKET).getPublicUrl(objectPath);
+    const publicUrl = data.publicUrl || "";
+
     if (!publicUrl) {
-      throw new Error(`Could not upload media file: ${file.name}`);
+      throw new Error(`Could not generate a public URL for "${file.name}".`);
     }
 
     uploaded.push({
@@ -367,63 +367,59 @@ export async function saveListing(input: {
   media: Array<{ id?: string; type: "photo" | "video"; url: string; position: number; originalName?: string; fileSize?: number }>;
   createdAt?: string;
   legacyId?: string | number;
-}): Promise<Listing | null> {
+}): Promise<Listing> {
   const listingId = input.id || crypto.randomUUID();
 
-  try {
-    const { data, error } = await supabase
-      .from("listings")
-      .upsert({
-        id: listingId,
-        creator_user_id: input.creatorUserId,
-        product_name: input.productName,
-        product_category: input.productCategory,
-        price: input.price,
-        stock: input.stock,
-        product_description: input.productDescription,
-        created_at: input.createdAt || new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "id" })
-      .select()
-      .single();
+  const { data, error } = await supabase
+    .from("listings")
+    .upsert({
+      id: listingId,
+      creator_user_id: input.creatorUserId,
+      product_name: input.productName,
+      product_category: input.productCategory,
+      price: input.price,
+      stock: input.stock,
+      product_description: input.productDescription,
+      created_at: input.createdAt || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "id" })
+    .select()
+    .single();
 
-    if (error || !data) {
-      console.error("Error saving listing to Supabase:", error);
-      return null;
-    }
-
-    const rows = input.media.map((item, index) => ({
-      id: item.id || crypto.randomUUID(),
-      listing_id: listingId,
-      media_type: item.type,
-      url: item.url,
-      position: item.position ?? index,
-      original_name: item.originalName || "",
-      file_size: item.fileSize || 0,
-    }));
-
-    if (rows.length > 0) {
-      await supabase.from("listing_media").delete().eq("listing_id", listingId);
-      const { error: mediaError } = await supabase.from("listing_media").upsert(rows, { onConflict: "id" });
-      if (mediaError) {
-        console.error("Error saving listing media to Supabase:", mediaError);
-      }
-    }
-
-    return buildListingFromRecord({
-      ...data,
-      listing_media: rows.map((row) => ({
-        id: row.id,
-        media_type: row.media_type,
-        url: row.url,
-        position: row.position,
-      })),
-      reviews: [],
-    });
-  } catch (error) {
+  if (error || !data) {
     console.error("Error saving listing to Supabase:", error);
-    return null;
+    throw new Error(error?.message || "Could not save the listing.");
   }
+
+  const rows = input.media.map((item, index) => ({
+    id: item.id || crypto.randomUUID(),
+    listing_id: listingId,
+    media_type: item.type,
+    url: item.url,
+    position: item.position ?? index,
+    original_name: item.originalName || "",
+    file_size: item.fileSize || 0,
+  }));
+
+  if (rows.length > 0) {
+    await supabase.from("listing_media").delete().eq("listing_id", listingId);
+    const { error: mediaError } = await supabase.from("listing_media").upsert(rows, { onConflict: "id" });
+    if (mediaError) {
+      console.error("Error saving listing media to Supabase:", mediaError);
+      throw new Error(mediaError.message || "Could not save the listing media.");
+    }
+  }
+
+  return buildListingFromRecord({
+    ...data,
+    listing_media: rows.map((row) => ({
+      id: row.id,
+      media_type: row.media_type,
+      url: row.url,
+      position: row.position,
+    })),
+    reviews: [],
+  });
 }
 
 export function mergeListingsByIdentity(...lists: any[][]): any[] {

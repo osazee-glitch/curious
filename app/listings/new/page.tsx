@@ -1,34 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { mergeListingsByIdentity, saveListing, uploadListingMedia } from "../../lib/supabase-data";
+import { loadCreatorProfile, mergeListingsByIdentity, saveListing, uploadListingMedia } from "../../lib/supabase-data";
 import { supabase } from "../../lib/supabase";
 
 const ACCOUNT_KEY = "ithinkly_account";
-
-const categoryOptions = [
-  "Assistive devices for elderly people",
-  "Assistive devices for children",
-  "Learning devices for kids",
-  "Homeware devices (non-AC powered)",
-  "Remote-controlled toy devices",
-  "Hardware devices",
-  "Home sensors & security devices",
-  "Robotics & moving devices",
-  "Educational & STEM devices",
-  "Desk & workspace devices",
-  "Accessibility devices",
-  "Personal-use devices",
-];
+const MIN_VIDEO_SECONDS = 10;
+const MAX_VIDEO_SECONDS = 90;
 
 export default function NewListingPage() {
-  const [productCategory, setProductCategory] = useState(categoryOptions[0]);
+  const [productCategory, setProductCategory] = useState("");
   const [productName, setProductName] = useState("");
   const [productPrice, setProductPrice] = useState("0.00");
   const [productStock, setProductStock] = useState("");
   const [productDescription, setProductDescription] = useState("");
   const [mediaFiles, setMediaFiles] = useState<File[]>([]);
   const [validationMessage, setValidationMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const getVideoDuration = (file: File): Promise<number> =>
     new Promise((resolve, reject) => {
@@ -73,8 +61,12 @@ export default function NewListingPage() {
     if (videos.length > 0) {
       try {
         const duration = await getVideoDuration(videos[0]);
-        if (duration > 90) {
-          setValidationMessage("Video duration must be 90 seconds or less.");
+        if (duration < MIN_VIDEO_SECONDS) {
+          setValidationMessage(`Video must be at least ${MIN_VIDEO_SECONDS} seconds long.`);
+          return;
+        }
+        if (duration > MAX_VIDEO_SECONDS) {
+          setValidationMessage(`Video duration must be ${MAX_VIDEO_SECONDS} seconds or less.`);
           return;
         }
       } catch (error) {
@@ -95,122 +87,96 @@ export default function NewListingPage() {
       return;
     }
 
-    const { data } = await supabase.auth.getUser();
-    const accountId = data.user?.id || "";
-    const storedAccount = accountId
-      ? window.localStorage.getItem(`${ACCOUNT_KEY}_${accountId}`)
-      : null;
-    const parsedAccount = storedAccount ? JSON.parse(storedAccount) : null;
-    const creatorUsername = parsedAccount?.username || "";
-
-    if (mediaFiles.length === 0) {
-      setValidationMessage("Please add at least one photo or video before posting your listing.");
+    if (!productCategory.trim()) {
+      setValidationMessage("Please enter a product category.");
       return;
     }
 
-    const uploadedMedia = await uploadListingMedia(accountId, mediaFiles);
+    if (mediaFiles.length === 0 || mediaFiles.filter((f) => f.type.startsWith("image/")).length === 0) {
+      setValidationMessage("Please add at least one photo before posting your listing.");
+      return;
+    }
 
-    const listing = {
-      id: crypto.randomUUID(),
-      creatorUserId: accountId,
-      productName,
-      productCategory,
-      price: Number(productPrice) || 0,
-      stock,
-      productDescription,
-      media: uploadedMedia.map((item) => ({
+    const { data } = await supabase.auth.getUser();
+    const accountId = data.user?.id || "";
+    if (!accountId) {
+      setValidationMessage("You must be signed in to post a listing.");
+      return;
+    }
+
+    const creatorProfile = await loadCreatorProfile(accountId);
+    if (!creatorProfile) {
+      setValidationMessage("You need to set up your creator shop before posting a listing.");
+      window.location.href = "/sell";
+      return;
+    }
+
+    const storedAccount = window.localStorage.getItem(`${ACCOUNT_KEY}_${accountId}`);
+    const parsedAccount = storedAccount ? JSON.parse(storedAccount) : null;
+    const creatorUsername = parsedAccount?.username || "";
+
+    setValidationMessage("");
+    setIsSubmitting(true);
+
+    try {
+      const uploadedMedia = await uploadListingMedia(accountId, mediaFiles);
+
+      const listingId = crypto.randomUUID();
+      const media = uploadedMedia.map((item) => ({
         id: item.id,
         type: item.type,
         url: item.url,
         position: item.position,
         originalName: mediaFiles[item.position]?.name || "",
         fileSize: mediaFiles[item.position]?.size || 0,
-      })),
-      createdAt: new Date().toISOString(),
-    };
+      }));
 
-    const saved = await saveListing({
-      id: listing.id,
-      creatorUserId: accountId,
-      productName: listing.productName,
-      productCategory: listing.productCategory,
-      price: listing.price,
-      stock: listing.stock,
-      productDescription: listing.productDescription,
-      media: listing.media.map((item) => ({
-        id: item.id,
-        type: item.type,
-        url: item.url,
-        position: item.position,
-        originalName: item.originalName,
-        fileSize: item.fileSize,
-      })),
-      createdAt: listing.createdAt,
-    });
+      const saved = await saveListing({
+        id: listingId,
+        creatorUserId: accountId,
+        productName,
+        productCategory: productCategory.trim(),
+        price: Number(productPrice) || 0,
+        stock,
+        productDescription,
+        media,
+        createdAt: new Date().toISOString(),
+      });
 
-    const storedListings = window.localStorage.getItem("ithinkly_listings");
-    const listings = storedListings ? JSON.parse(storedListings) : [];
-    const legacyListing = {
-      id: listing.id,
-      creatorAccountId: accountId,
-      creatorUsername,
-      creatorAccount: parsedAccount || null,
-      productName,
-      productCategory,
-      price: Number(productPrice) || 0,
-      stock,
-      productDescription,
-      media: uploadedMedia.map((item) => ({ ...item, name: mediaFiles[item.position]?.name || "", size: mediaFiles[item.position]?.size || 0 })),
-      reviews: [],
-      createdAt: new Date().toISOString(),
-    };
+      const storedListings = window.localStorage.getItem("ithinkly_listings");
+      const listings = storedListings ? JSON.parse(storedListings) : [];
+      const legacyListing = {
+        ...saved,
+        creatorAccountId: accountId,
+        creatorUsername,
+        creatorAccount: parsedAccount || null,
+        media: saved.media.map((m) => ({ url: m.url, type: m.type, name: m.id, size: 0 })),
+        reviews: [],
+      };
 
-    const mergedListings = mergeListingsByIdentity(listings, [legacyListing, saved ? {
-      ...saved,
-      creatorAccountId: accountId,
-      creatorUsername,
-      creatorAccount: parsedAccount || null,
-      media: saved.media.map((m) => ({
-        url: m.url,
-        type: m.type,
-        name: m.id,
-        size: 0,
-      })),
-      reviews: [],
-      productName: saved.productName,
-      productCategory: saved.productCategory,
-      productDescription: saved.productDescription,
-      price: saved.price,
-      stock: saved.stock,
-      createdAt: saved.createdAt,
-    } : null]);
-    window.localStorage.setItem("ithinkly_listings", JSON.stringify(mergedListings));
-    window.location.href = "/market";
+      const mergedListings = mergeListingsByIdentity(listings, [legacyListing]);
+      window.localStorage.setItem("ithinkly_listings", JSON.stringify(mergedListings));
+      window.location.href = "/market";
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not post your listing. Please try again.";
+      setValidationMessage(message);
+      setIsSubmitting(false);
+    }
   };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       if (!data.session) {
         window.location.href = "/signin";
         return;
       }
 
-      const storedAccount = window.localStorage.getItem(`${ACCOUNT_KEY}_${data.session.user.id}`);
-      if (!storedAccount) return;
-
-      try {
-        const parsedAccount = JSON.parse(storedAccount);
-        if (!parsedAccount.username) {
-          const fallback = { ...parsedAccount, username: "" };
-          window.localStorage.setItem(
-            `${ACCOUNT_KEY}_${data.session.user.id}`,
-            JSON.stringify(fallback),
-          );
-        }
-      } catch {
-        // ignore malformed local storage state
+      // Only accounts that have completed creator/shop setup may post listings.
+      const creatorProfile = await loadCreatorProfile(data.session.user.id);
+      if (!creatorProfile) {
+        window.location.href = "/sell";
       }
     });
   }, []);
@@ -245,7 +211,7 @@ export default function NewListingPage() {
                   Product photos &amp; videos
                 </label>
                 <p className="mb-3 text-xs text-zinc-500">
-                  Maximum: 5 photos and 1 video (90 seconds max)
+                  1–5 photos required. Optional video: max 1, 10–90 seconds.
                 </p>
                 <input
                   type="file"
@@ -276,36 +242,17 @@ export default function NewListingPage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm text-zinc-600">Product category</label>
-                <div className="space-y-2">
-                  {categoryOptions.map((option) => {
-                    const checked = productCategory === option;
-
-                    return (
-                      <label
-                        key={option}
-                        className={[
-                          "flex cursor-pointer items-center gap-3 rounded-full border px-4 py-3 text-sm transition",
-                          checked
-                            ? "border-zinc-900 bg-zinc-900 text-white"
-                            : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300",
-                        ].join(" ")}
-                      >
-                        <input
-                          type="radio"
-                          name="product-category"
-                          checked={checked}
-                          onChange={() => setProductCategory(option)}
-                          className="sr-only"
-                        />
-                        <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-current text-[10px]">
-                          {checked ? "•" : ""}
-                        </span>
-                        <span>{option}</span>
-                      </label>
-                    );
-                  })}
-                </div>
+                <label htmlFor="product-category" className="mb-2 block text-sm text-zinc-600">
+                  Product category
+                </label>
+                <input
+                  id="product-category"
+                  type="text"
+                  value={productCategory}
+                  onChange={(event) => setProductCategory(event.target.value)}
+                  placeholder="Enter product category"
+                  className="w-full rounded-full border border-zinc-200 bg-white px-4 py-3 text-base text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-zinc-400"
+                />
               </div>
 
               <div>
@@ -368,9 +315,10 @@ export default function NewListingPage() {
               <button
                 type="button"
                 onClick={handlePostListing}
-                className="mt-2 block w-full rounded-full bg-zinc-900 px-4 py-3 text-center text-sm font-medium uppercase tracking-[0.16em] text-white transition hover:bg-zinc-700"
+                disabled={isSubmitting}
+                className="mt-2 block w-full rounded-full bg-zinc-900 px-4 py-3 text-center text-sm font-medium uppercase tracking-[0.16em] text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-400"
               >
-                POST LISTING
+                {isSubmitting ? "POSTING..." : "POST LISTING"}
               </button>
             </form>
           </div>
